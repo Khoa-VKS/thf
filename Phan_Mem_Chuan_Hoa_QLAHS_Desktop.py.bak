@@ -1,0 +1,3954 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH
+HỆ THỐNG TỔNG HỢP VÀ XỬ LÝ DỮ LIỆU NTQLAHS (CHẠY OFFLINE 100%)
+------------------------------------------------------------------------------
+Châm ngôn: "CÔNG MINH - CHÍNH TRỰC - KHÁCH QUAN - THẬN TRỌNG - KHIÊM TỐN"
+
+Chức năng:
+- Đọc file Excel (.xlsx) copy từ phần mềm Quản lý án hình sự (QLAHS).
+- Hoặc nhận dữ liệu dán trực tiếp (Ctrl+V) từ clipboard.
+- Tự động bóc tách và chuẩn hóa thành bảng 12 cột chuẩn:
+  1. STT
+  2. Mã vụ án
+  3. Tên vụ án
+  4. Cơ quan cảnh sát điều tra
+  5. Tỉnh/Thành (Tự động đọc và nhận dạng từ CQĐT)
+  6. Giai đoạn
+  7. Mã bị can
+  8. Tên bị can
+  9. Ngày sinh
+  10. Số CCCD
+  11. Điều luật
+  12. Trạng thái hồ sơ (Đình nã, Truy nã, Tạm đình chỉ...)
+- Sinh bảng Pivot Table ma trận tổng quan: Tỉnh/Thành × Giai đoạn / Trạng thái hồ sơ.
+- Giữ nguyên số 0 ở đầu cho Mã vụ án, Mã bị can, Số CCCD (Text '@').
+- Xuất file Excel chuẩn gồm 2 Sheet:
+  * Sheet 1: Danh_Sach_Chuan_Hoa (12 cột)
+  * Sheet 2: Tong_Hop_Pivot_Table (Ma trận tổng hợp theo Tỉnh/Thành và Giai đoạn)
+"""
+
+import os
+import queue
+import re
+import sys
+import threading
+import time
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+
+try:
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+except ImportError:
+    openpyxl = None
+
+# Danh mục nhận dạng 63 Tỉnh/Thành phố & Cơ quan Trung ương
+PROVINCE_RULES = [
+    # 5 Thành phố trực thuộc Trung ương
+    ("TP. Hồ Chí Minh", ["hồ chí minh", "ho chi minh", "tphcm", "tp.hcm", "tp hcm", "sài gòn", "thủ đức", "quận 1", "quận 3", "quận 4", "quận 5", "quận 6", "quận 7", "quận 8", "quận 10", "quận 11", "quận 12", "bình thạnh", "gò vấp", "tân bình", "tân phú", "phú nhuận", "bình tân", "củ chi", "hóc môn", "bình chánh", "nhà bè", "cần giờ"]),
+    ("Hà Nội", ["hà nội", "ha noi", "thủ đô hà nội", "hn", "ba đình", "hoàn kiếm", "đống đa", "hai bà trưng", "cầu giấy", "thanh xuân", "hoàng mai", "long biên", "nam từ liêm", "bắc từ liêm", "tây hồ", "hà đông", "sơn tây", "ba vì", "chương mỹ", "đan phượng", "đông anh", "gia lâm", "hoài đức", "mê linh", "mỹ đức", "phú xuyên", "phúc thọ", "quốc oai", "sóc sơn", "thạch thất", "thanh oai", "thanh trì", "thường tín", "ứng hòa"]),
+    ("Hải Phòng", ["hải phòng", "hai phong", "hp", "ngô quyền", "hồng bàng", "lê chân", "hải an", "kiến an", "đồ sơn", "dương kinh", "thủy nguyên", "an dương", "an lão", "kiến thụy", "tiên lãng", "vĩnh bảo", "cát hải", "bạch long vĩ"]),
+    ("Đà Nẵng", ["đà nẵng", "da nang", "hải châu", "thanh khê", "sơn trà", "ngũ hành sơn", "liên chiểu", "cẩm lệ", "hòa vang", "hoàng sa"]),
+    ("Cần Thơ", ["cần thơ", "can tho", "ninh kiều", "bình thủy", "cái răng", "ô môn", "thốt nốt", "phong điền", "cờ đỏ", "thới lai", "vĩnh thạnh"]),
+
+    # Miền Bắc
+    ("Bắc Giang", ["bắc giang", "bac giang", "việt yên", "hiệp hòa", "lạng giang", "lục nam", "lục ngạn", "sơn động", "tân yên", "yên dũng", "yên thế"]),
+    ("Bắc Kạn", ["bắc kạn", "bắc cạn", "bac kan", "bac can", "ba bể", "bạch thông", "chợ đồn", "chợ mới", "na rì", "ngân sơn", "pác nặm"]),
+    ("Bắc Ninh", ["bắc ninh", "bac ninh", "từ sơn", "thuận thành", "quế võ", "yên phong", "tiên du", "gia bình", "lương tài"]),
+    ("Cao Bằng", ["cao bằng", "cao bang", "bảo lạc", "bảo lâm", "hạ lang", "hà quảng", "hòa an", "nguyên bình", "thạch an", "trùng khánh"]),
+    ("Điện Biên", ["điện biên", "dien bien", "mường lay", "mường nhé", "mường chà", "tủa chùa", "tuần giáo", "điện biên đông", "nậm pồ"]),
+    ("Hà Giang", ["hà giang", "ha giang", "đồng văn", "mèo vạc", "yên minh", "quản bạ", "vị xuyên", "bắc mê", "hoàng su phì", "xín mần", "bắc quang", "quang bình"]),
+    ("Hà Nam", ["hà nam", "ha nam", "phủ lý", "duy tiên", "kim bảng", "thanh liêm", "bình lục", "lý nhân"]),
+    ("Hải Dương", ["hải dương", "hai duong", "chí linh", "kinh môn", "bình giang", "cẩm giàng", "gia lộc", "kim thành", "nam sách", "ninh giang", "thanh hà", "thanh miện", "tứ kỳ"]),
+    ("Hòa Bình", ["hòa bình", "hoa binh", "lương sơn", "cao phong", "đà bắc", "kim bôi", "lạc sơn", "lạc thủy", "mai châu", "tân lạc", "yên thủy"]),
+    ("Hưng Yên", ["hưng yên", "hung yen", "mỹ hào", "ân thi", "khoái châu", "kim động", "phù cừ", "tiên lữ", "văn giang", "văn lâm", "yên mỹ"]),
+    ("Lai Châu", ["lai châu", "lai chau", "mường tè", "sìn hồ", "nậm nhùn", "tam đường", "tân uyên", "than uyên", "phong thổ"]),
+    ("Lạng Sơn", ["lạng sơn", "lang son", "bắc sơn", "bình gia", "cao lộc", "chi lăng", "đình lập", "hữu lũng", "lộc bình", "tràng định", "văn lãng", "văn quan"]),
+    ("Lào Cai", ["lào cai", "lao cai", "sa pa", "bát xát", "bảo thắng", "bảo yên", "bắc hà", "mường khương", "si ma cai", "văn bàn"]),
+    ("Nam Định", ["nam định", "nam dinh", "giao thủy", "hải hậu", "mỹ lộc", "nam trực", "nghĩa hưng", "trực ninh", "vụ bản", "xuân trường", "ý yên"]),
+    ("Ninh Bình", ["ninh bình", "ninh binh", "tam điệp", "gia viễn", "hoa lư", "kim sơn", "nho quan", "yên khánh", "yên mô"]),
+    ("Phú Thọ", ["phú thọ", "phu tho", "việt trì", "cẩm khê", "đoan hùng", "hạ hòa", "lâm thao", "phù ninh", "tam nông", "tân sơn", "thanh ba", "thanh sơn", "thanh thủy", "yên lập"]),
+    ("Quảng Ninh", ["quảng ninh", "quang ninh", "hạ long", "cẩm phả", "uông bí", "móng cái", "đông triều", "quảng yên", "vân đồn", "tiên yên", "ba chẽ", "bình liêu", "đầm hà", "hải hà", "cô tô"]),
+    ("Sơn La", ["sơn la", "son la", "mộc châu", "quỳnh nhai", "mường la", "thuận châu", "phù yên", "bắc yên", "mai sơn", "sông mã", "sốp cộp", "vân hồ"]),
+    ("Thái Bình", ["thái bình", "thai binh", "đông hưng", "hưng hà", "kiến xương", "quỳnh phụ", "thái thụy", "tiền hải", "vũ thư"]),
+    ("Thái Nguyên", ["thái nguyên", "thai nguyen", "sông công", "phổ yên", "đại từ", "định hóa", "đồng hỷ", "phú bình", "phú lương", "võ nhai"]),
+    ("Tuyên Quang", ["tuyên quang", "tuyen quang", "chiêm hóa", "hàm yên", "lâm bình", "na hang", "sơn dương", "yên sơn"]),
+    ("Vĩnh Phúc", ["vĩnh phúc", "vinh phuc", "vĩnh yên", "phúc yên", "bình xuyên", "lập thạch", "sông lô", "tam đảo", "tam dương", "vĩnh tường", "yên lạc"]),
+    ("Yên Bái", ["yên bái", "yen bai", "nghĩa lộ", "lục yên", "mù cang chải", "trạm tấu", "trấn yên", "văn chấn", "văn yên", "yên bình"]),
+
+    # Miền Trung & Tây Nguyên
+    ("Hà Tĩnh", ["hà tĩnh", "ha tinh", "hồng lĩnh", "kỳ anh", "hương sơn", "cẩm xuyên", "nghi xuân", "đức thọ", "hương khê", "lộc hà", "thạch hà", "can lộc", "vũ quang"]),
+    ("Nghệ An", ["nghệ an", "nghe an", "vinh", "thái hòa", "cửa lò", "hoàng mai", "diễn châu", "quỳnh lưu", "yên thành", "đô lương", "nghi lộc", "nam đàn", "hưng nguyên", "thanh chương", "anh sơn", "con cuông", "tương dương", "kỳ sơn", "quỳ hợp", "quỳ châu", "quế phong", "tân kỳ"]),
+    ("Thanh Hóa", ["thanh hóa", "thanh hoa", "sầm sơn", "bỉm sơn", "nghi sơn", "bá thước", "cẩm thủy", "đông sơn", "hà trung", "hậu lộc", "hoằng hóa", "lang chánh", "mường lát", "nga sơn", "ngọc lặc", "như thanh", "như xuân", "nông cống", "quan hóa", "quan sơn", "quảng xương", "thạch thành", "thiệu hóa", "thọ xuân", "thường xuân", "triệu sơn", "vĩnh lộc", "yên định"]),
+    ("Quảng Bình", ["quảng bình", "quang binh", "đồng hới", "ba đồn", "bố trạch", "lệ thủy", "minh hóa", "quảng ninh", "quảng trạch", "tuyên hóa"]),
+    ("Quảng Trị", ["quảng trị", "quang tri", "đông hà", "quảng trị", "cam lộ", "cồn cỏ", "đa krông", "gio linh", "hướng hóa", "hải lăng", "triệu phong", "vĩnh linh"]),
+    ("Thừa Thiên Huế", ["thừa thiên huế", "thừa thiên - huế", "thừa thiên", "thua thien hue", "huế", "hương thủy", "hương trà", "a lưới", "nam đông", "phong điền", "phú lộc", "phú vang", "quảng điền"]),
+    ("Quảng Nam", ["quảng nam", "quang nam", "tam kỳ", "hội an", "điện bàn", "bắc trà my", "nam trà my", "đại lộc", "đông giang", "duy xuyên", "hiệp đức", "nam giang", "nông sơn", "núi thành", "phú ninh", "phước sơn", "quế sơn", "tây giang", "thăng bình", "tiên phước"]),
+    ("Quảng Ngãi", ["quảng ngãi", "quang ngai", "đức phổ", "ba tơ", "bình sơn", "lý sơn", "minh long", "mộ đức", "nghĩa hành", "sơn hà", "sơn tây", "sơn tịnh", "trà bồng", "tư nghĩa"]),
+    ("Bình Định", ["bình định", "binh dinh", "quy nhơn", "an nhơn", "hoài nhơn", "an lão", "hoài ân", "phù cát", "phù mỹ", "tây sơn", "tuy phước", "vân canh", "vĩnh thạnh"]),
+    ("Phú Yên", ["phú yên", "phu yen", "tuy hòa", "sông cầu", "đông hòa", "đồng xuân", "phú hòa", "sơn hòa", "sông hinh", "tây hòa", "tuy an"]),
+    ("Khánh Hòa", ["khánh hòa", "khanh hoa", "nha trang", "cam ranh", "ninh hòa", "cam lâm", "diên khánh", "khánh sơn", "khánh vĩnh", "trường sa", "vạn ninh"]),
+    ("Ninh Thuận", ["ninh thuận", "ninh thuan", "phan rang", "tháp chàm", "bác ái", "ninh hải", "ninh phước", "ninh sơn", "thuận bắc", "thuận nam"]),
+    ("Bình Thuận", ["bình thuận", "binh thuan", "phan thiết", "la gi", "bắc bình", "đức linh", "hàm tân", "hàm thuận bắc", "hàm thuận nam", "phú quý", "tánh linh", "tuy phong"]),
+    ("Kon Tum", ["kon tum", "kontum", "đăk hà", "đăk tô", "ia h'drai", "kon plông", "kon rẫy", "ngọc hồi", "sa thầy", "tu mơ rông"]),
+    ("Gia Lai", ["gia lai", "pleiku", "an khê", "ayar pa", "chư păh", "chư prông", "chư pưh", "chư sê", "đăk đoa", "đăk pơ", "đức cơ", "ia grai", "ia pa", "k'bang", "kông chro", "krông pa", "mang yang", "phú thiện"]),
+    ("Đắk Lắk", ["đắk lắk", "đắc lắc", "đăk lăk", "dak lak", "daklak", "buôn ma thuột", "buôn hồ", "buôn đôn", "cư kuin", "cư m'gar", "ea h'leo", "ea kar", "ea súp", "krông ana", "krông bông", "krông bắk", "krông năng", "krông pắc", "lắk", "m'đrắk"]),
+    ("Đắk Nông", ["đắk nông", "đắc nông", "đăk nông", "dak nong", "gia nghĩa", "cư jút", "đắk glong", "đắk mil", "đắk r'lấp", "đắk song", "krông nô", "tuy đức"]),
+    ("Lâm Đồng", ["lâm đồng", "lam dong", "đà lạt", "bảo lộc", "bảo lâm", "cát tiên", "di linh", "đạ hoai", "đạ tẻh", "đam rông", "đơn dương", "đức trọng", "lạc dương", "lâm hà"]),
+
+    # Miền Đông & Tây Nam Bộ
+    ("Bình Dương", ["bình dương", "binh duong", "thủ dầu một", "dĩ an", "thuận an", "bến cát", "tân uyên", "bàu bàng", "dầu tiếng", "phú giáo", "bắc tân uyên"]),
+    ("Bình Phước", ["bình phước", "binh phuoc", "đồng xoài", "bình long", "phước long", "bù đăng", "bù đốp", "bù gia mập", "chơn thành", "đồng phú", "hớn quản", "lộc ninh", "phú riêng"]),
+    ("Đồng Nai", ["đồng nai", "dong nai", "biên hòa", "long khánh", "cẩm mỹ", "định quán", "long thành", "nhơn trạch", "tân phú", "thống nhất", "trảng bom", "vĩnh cửu", "xuân lộc"]),
+    ("Tây Ninh", ["tây ninh", "tay ninh", "trảng bàng", "hòa thành", "bến cầu", "châu thành", "dương minh châu", "gò dầu", "tân biên", "tân châu"]),
+    ("Bà Rịa - Vũng Tàu", ["bà rịa", "vũng tàu", "ba ria", "vung tau", "brvt", "br-vt", "phú mỹ", "châu đức", "côn đảo", "đất đỏ", "long điền", "xuyên mộc"]),
+    ("Long An", ["long an", "tân an", "kiến tường", "bến lức", "cần đước", "cần giuộc", "châu thành", "đức hòa", "đức huệ", "mộc hóa", "tân hưng", "tân thạnh", "tân trụ", "thạnh hóa", "thủ thừa", "vĩnh hưng"]),
+    ("Tiền Giang", ["tiền giang", "tien giang", "mỹ tho", "gò công", "cai lậy", "cái bè", "châu thành", "chợ gạo", "tân phước", "tân phú đông"]),
+    ("Bến Tre", ["bến tre", "ben tre", "ba tri", "bình đại", "châu thành", "chợ lách", "giồng trôm", "mỏ cày bắc", "mỏ cày nam", "thạnh phú"]),
+    ("Trà Vinh", ["trà vinh", "tra vinh", "duyên hải", "càng long", "cầu kè", "cầu ngang", "châu thành", "tiểu cần", "trà cú"]),
+    ("Vĩnh Long", ["vĩnh long", "vinh long", "bình minh", "bình tân", "long hồ", "mang thít", "tam bình", "trà ôn", "vũng liêm"]),
+    ("Đồng Tháp", ["đồng tháp", "dong thap", "cao lãnh", "sa đéc", "hồng ngự", "châu thành", "lai vung", "lấp vò", "tam nông", "tân hồng", "thanh bình", "tháp mười"]),
+    ("An Giang", ["an giang", "long xuyên", "châu đốc", "tân châu", "tịnh biên", "an phú", "châu phú", "châu thành", "chợ mới", "phú tân", "thoại sơn", "tri tôn"]),
+    ("Kiên Giang", ["kiên giang", "kien giang", "rạch giá", "hà tiên", "phú quốc", "an biên", "an minh", "châu thành", "giang thành", "giồng riêng", "gò quao", "hòn đất", "kiên hải", "kiên lương", "tân hiệp", "u minh thượng", "vĩnh thuận"]),
+    ("Hậu Giang", ["hậu giang", "hau giang", "vị thanh", "ngã bảy", "châu thành", "châu thành a", "long mỹ", "phụng hiệp", "vị thủy"]),
+    ("Sóc Trăng", ["sóc trăng", "soc trang", "ngã năm", "vĩnh châu", "châu thành", "cù lao dung", "kế sách", "mỹ tú", "mỹ xuyên", "thạnh trị", "trần đề"]),
+    ("Bạc Liêu", ["bạc liêu", "bac lieu", "giá rai", "đông hải", "hòa bình", "hồng dân", "phước long", "vĩnh lợi"]),
+    ("Cà Mau", ["cà mau", "ca mau", "cái nước", "đầm dơi", "năm căn", "ngọc hiển", "phú tân", "thới bình", "trần văn thời", "u minh"]),
+
+    # Cơ quan Trung ương / Bộ ngành
+    ("Bộ Công an", ["bộ công an", "cục c01", "cục c02", "cục c03", "cục c04", "cục c05", "cục a09", "cục cảnh sát điều tra", "cơ quan an ninh điều tra bộ công an", "cục an ninh", "bca"]),
+    ("VKSND tối cao", ["vksnd tối cao", "vksndtc", "viện kiểm sát nhân dân tối cao", "cơ quan điều tra vksnd", "cục 1 vksnd"]),
+    ("Bộ Quốc phòng", ["bộ quốc phòng", "cục điều tra hình sự bộ quốc phòng", "quân khu", "bộ tư lệnh"]),
+]
+
+from datetime import datetime, date
+
+def parse_date_safely(val):
+    """Chuyển đổi chuỗi ngày tháng sang đối tượng date chuẩn an toàn."""
+    if not val:
+        return None
+    val_s = str(val).strip()
+    if not val_s:
+        return None
+    for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%y'):
+        try:
+            return datetime.strptime(val_s, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+CQDT_PREFIXES = (
+    "công an",
+    "cơ quan",
+    "cqcsđt",
+    "cqđt",
+    "cục điều tra",
+    "viện kiểm sát",
+    "bộ tư lệnh",
+    "chi cục",
+    "đồn biên phòng",
+    "hải quan",
+    "kiểm lâm",
+)
+
+COLUMNS_12 = [
+    ("stt", "STT", 50),
+    ("ma_vu_an", "Mã vụ án", 160),
+    ("ten_vu_an", "Tên vụ án", 220),
+    ("cqdt", "Cơ quan cảnh sát điều tra", 180),
+    ("tinh_thanh", "Tỉnh/Thành", 130),
+    ("giai_doan", "Giai đoạn", 95),
+    ("ma_bi_can", "Mã bị can", 165),
+    ("ten_bi_can", "Tên bị can", 145),
+    ("ngay_sinh", "Ngày sinh", 95),
+    ("so_cccd", "Số CCCD", 115),
+    ("dieu_luat", "Điều luật", 220),
+    ("trang_thai", "Trạng thái hồ sơ", 120),
+]
+
+# 26 Cột chuẩn hóa cho định dạng Sổ Vụ án / Sổ Thụ lý / Thời hiệu truy cứu TNHS
+# Được phân nhóm khoa học: Vụ án -> Khởi tố -> Thụ lý VKS -> Tiến độ & Thời hiệu -> Bị can & Tội danh -> Phân công & Kết quả
+
+# Danh sách lãnh đạo Viện và lãnh đạo Phòng theo phân công của VKSND TP.HCM
+LANH_DAO_VIEN = [
+    "Bùi Xuân Thái",
+    "Võ Quang Huy",
+]
+
+LANH_DAO_PHONG_2 = [
+    "Nguyễn Quỳnh Lan",
+    "Đỗ Tất Minh Tuấn",
+    "Đào Thị Hồng Vân",
+    "Nguyễn Duy Thạch",
+    "Trần Tấn Lập",
+    "Nguyễn Quang Duyệt",
+    "Cao Xuân Cường",
+]
+
+
+def clean_person_name(name):
+    """
+    Chuẩn hóa tên cán bộ/lãnh đạo:
+    - Loại bỏ hoàn toàn các tiền tố chức danh: PVT, Phó Viện trưởng, LĐ Viện, TP, PTP, KSV, CV, Đ/c, Đc...
+    - Loại bỏ các ký tự thừa (chấm, hai chấm, gạch ngang...).
+    - Xử lý lặp từ ở cuối (ví dụ 'Bùi Xuân Thái Thái' -> 'Bùi Xuân Thái').
+    - Chuẩn hóa về đúng họ tên đích danh chính thức nếu thuộc danh sách Lãnh đạo Viện / Lãnh đạo Phòng.
+    """
+    if not name:
+        return ""
+    s = str(name).replace("\xa0", " ").strip()
+    
+    # Bóc tách triệt để các tiền tố chức danh (lặp lại xử lý tiền tố kép như 'Đ/c PVT.')
+    pattern_prefix = r'^(?:đ\/c|đc|lđ\s*viện|lãnh\s*đạo\s*viện|pvt|phó\s*viện\s*trưởng|viện\s*trưởng|trưởng\s*phòng|phó\s*trưởng\s*phòng|lđ\s*phòng|tp|ptp|ksv|kiểm\s*sát\s*viên|cv|chuyên\s*viên)[\s.:\-_/]*'
+    while re.search(pattern_prefix, s, re.I):
+        s = re.sub(pattern_prefix, '', s, flags=re.I).strip()
+    
+    s = re.sub(r'^[.\-:\s,;]+', '', s)
+    s = re.sub(r'[.\-:\s,;]+$', '', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    
+    if not s:
+        return ""
+
+    # Xử lý lặp từ cuối (ví dụ 'Bùi Xuân Thái Thái' -> 'Bùi Xuân Thái')
+    words = s.split()
+    if len(words) >= 3 and words[-1].lower() == words[-2].lower():
+        words.pop()
+        s = " ".join(words)
+
+    # Khớp đích danh Lãnh đạo Viện (trả về tên chuẩn không kèm chức vụ)
+    s_low = s.lower()
+    for ldv in LANH_DAO_VIEN:
+        if ldv.lower() in s_low or s_low in ldv.lower():
+            return ldv
+
+    # Khớp đích danh Lãnh đạo Phòng 2 (trả về tên chuẩn không kèm chức vụ)
+    for ldp in LANH_DAO_PHONG_2:
+        if ldp.lower() in s_low or s_low in ldp.lower():
+            return ldp
+
+    return s
+
+
+def split_officers(raw_text, can_bo_thu_ly=""):
+    """
+    Phân tách chính xác cán bộ thành 4 cột nghiệp vụ độc lập:
+    1. lanh_dao_vien: Lãnh đạo Viện phụ trách (chỉ họ và tên, đã xóa mọi tiền tố PVT...)
+    2. lanh_dao_phong: Lãnh đạo Phòng phụ trách (chỉ họ và tên, đã xóa mọi tiền tố TP/PTP...)
+    3. can_bo_giai_quyet: Kiểm sát viên giải quyết (đã loại bỏ tên LĐ Viện và LĐ Phòng)
+    4. can_bo_thu_ly: Cán bộ thụ lý / Chuyên viên giúp việc
+    """
+    if not raw_text and not can_bo_thu_ly:
+        return "", "", "", ""
+
+    text = str(raw_text or "").replace("\xa0", " ").strip()
+    clean_text = re.sub(r'[\(\)]', ' ', text)
+    raw_parts = [p.strip() for p in re.split(r'[,;|\n]+', clean_text) if p.strip()]
+
+    ld_vien_found = []
+    ld_phong_found = []
+    ksv_found = []
+    cv_found = []
+
+    for item in raw_parts:
+        if not item or len(item) < 2:
+            continue
+        
+        item_lower = item.lower()
+
+        # 1. Nhận diện chức danh viết tắt rõ ràng cho Lãnh đạo Viện
+        if re.search(r'^(?:pvt|phó\s*viện\s*trưởng|lđ\s*viện)[\s.:\-_/]*', item_lower):
+            c_name = clean_person_name(item)
+            if c_name and c_name not in ld_vien_found:
+                ld_vien_found.append(c_name)
+            continue
+
+        # 2. Nhận diện chức danh viết tắt cho Lãnh đạo Phòng
+        if re.search(r'^(?:tp|ptp|trưởng\s*phòng|phó\s*trưởng\s*phòng)[\s.:\-_/]*', item_lower):
+            c_name = clean_person_name(item)
+            if c_name and c_name not in ld_phong_found:
+                ld_phong_found.append(c_name)
+            continue
+
+        # 3. Nhận diện Chuyên viên / Cán bộ thụ lý
+        if re.search(r'^(?:cv|chuyên\s*viên)[\s.:\-_/]*', item_lower):
+            c_name = clean_person_name(item)
+            if c_name and c_name not in cv_found:
+                cv_found.append(c_name)
+            continue
+
+        # 4. Nhận diện Kiểm sát viên có chức danh KSV
+        if re.search(r'^(?:ksv|kiểm\s*sát\s*viên)[\s.:\-_/]*', item_lower):
+            c_name = clean_person_name(item)
+            if c_name and c_name not in ksv_found:
+                ksv_found.append(c_name)
+            continue
+
+        # 5. So khớp đích danh theo danh sách Lãnh đạo Viện
+        matched_ldv = False
+        for ldv in LANH_DAO_VIEN:
+            if ldv.lower() in item_lower:
+                if ldv not in ld_vien_found:
+                    ld_vien_found.append(ldv)
+                matched_ldv = True
+                break
+        if matched_ldv:
+            continue
+
+        # 6. So khớp đích danh theo danh sách Lãnh đạo Phòng
+        matched_ldp = False
+        for ldp in LANH_DAO_PHONG_2:
+            if ldp.lower() in item_lower:
+                if ldp not in ld_phong_found:
+                    ld_phong_found.append(ldp)
+                matched_ldp = True
+                break
+        if matched_ldp:
+            continue
+
+        # 7. Còn lại là Kiểm sát viên / Cán bộ giải quyết
+        clean_name = clean_person_name(item)
+        if clean_name and clean_name not in ksv_found:
+            ksv_found.append(clean_name)
+
+    cb_tl_clean = []
+    if can_bo_thu_ly:
+        for p in re.split(r'[,;|\n]+', str(can_bo_thu_ly).replace("\xa0", " ")):
+            c_tl = clean_person_name(p)
+            if c_tl and c_tl not in cb_tl_clean:
+                cb_tl_clean.append(c_tl)
+    for cv in cv_found:
+        if cv not in cb_tl_clean:
+            cb_tl_clean.append(cv)
+
+    return (
+        "; ".join(ld_vien_found),
+        "; ".join(ld_phong_found),
+        "; ".join(ksv_found),
+        "; ".join(cb_tl_clean)
+    )
+
+
+
+COLUMNS_CASE_29 = [
+    # Nhóm 1: Vụ án & Đơn vị địa bàn
+    ("stt", "STT", 50),
+    ("nguon_du_lieu", "Nguồn dữ liệu đối chiếu", 170),
+    ("ma_vu_an", "Mã vụ án", 190),
+    ("ten_vu_an", "Tên vụ án / Nội dung / QĐ TĐC", 260),
+    ("tinh_thanh", "Tỉnh / Thành phố", 135),
+
+    # Nhóm 2: Quyết định Khởi tố
+    ("so_qd_khoi_to", "Số QĐ khởi tố", 105),
+    ("ngay_qd_khoi_to", "Ngày ra QĐ khởi tố", 120),
+    ("don_vi_khoi_to", "Đơn vị ra QĐ khởi tố", 210),
+
+    # Nhóm 3: Thụ lý Kiểm sát
+    ("so_thu_ly", "Số thụ lý", 95),
+    ("ngay_thu_ly", "Ngày thụ lý", 110),
+    ("loai_thu_ly", "Loại thụ lý", 130),
+    ("vks_thu_ly", "Đơn vị VKS thụ lý", 240),
+
+    # Nhóm 4: Tiến độ & Thời hiệu TNHS
+    ("ngay_tiep_nhan", "Ngày tiếp nhận hồ sơ", 125),
+    ("thoi_han_giai_quyet", "Thời hạn giải quyết", 125),
+    ("ngay_het_thoi_hieu", "Ngày hết thời hiệu TNHS", 145),
+    ("so_ngay_con_lai", "Số ngày còn lại", 115),
+    ("muc_do_khan_cap", "Mức độ khẩn cấp", 175),
+    ("canh_bao_thoi_hieu", "Cảnh báo thời hiệu", 180),
+
+    # Nhóm 5: Bị can & Tội danh
+    ("bi_can_dau_vu", "Bị can đầu vụ & CCCD", 200),
+    ("tong_bi_can", "Tổng số bị can", 95),
+    ("dieu_luat", "Thông tin tội danh / Điều luật", 250),
+    ("loai_toi", "Phân loại tội", 130),
+
+    # Nhóm 6: Phân công Lãnh đạo & Cán bộ nghiệp vụ (Tách riêng biệt)
+    ("lanh_dao_vien", "Lãnh đạo Viện phụ trách", 180),
+    ("lanh_dao_phong", "Lãnh đạo Phòng phụ trách", 210),
+    ("can_bo_giai_quyet", "Kiểm sát viên giải quyết", 210),
+    ("can_bo_thu_ly", "Cán bộ thụ lý / Chuyên viên", 170),
+
+    # Nhóm 7: Tiến độ & Trạng thái tố tụng
+    ("giai_doan", "Giai đoạn tố tụng", 115),
+    ("trang_thai_vu_an", "Trạng thái vụ án", 150),
+    ("trang_thai_bieu_mau", "Trạng thái biểu mẫu", 180),
+]
+COLUMNS_CASE_27 = COLUMNS_CASE_29
+COLUMNS_CASE_26 = COLUMNS_CASE_29
+COLUMNS_CASE_24 = COLUMNS_CASE_29
+
+# 30 Cột chuẩn hóa toàn diện cho Danh sách Tin báo về tội phạm (QLAHS)
+COLUMNS_TIN_BAO_30 = [
+    # Nhóm 1: Nhận diện & Nguồn tin
+    ("stt", "STT", 50),
+    ("ma_tin_bao", "Mã tin báo", 160),
+    ("loai_tin", "Loại tin", 100),
+    ("nguon_tin", "Nguồn tin", 120),
+    ("tinh_tiet_phuc_tap", "Phức tạp", 80),
+
+    # Nhóm 2: Người / Tổ chức báo tin
+    ("nguoi_bao_tin", "Người / CQ báo tin", 180),
+    ("cccd_nguoi_bao", "CCCD / Định danh", 130),
+    ("sdt_nguoi_bao", "Số điện thoại", 110),
+    ("dia_chi_nguoi_bao", "Địa chỉ người báo", 200),
+
+    # Nhóm 3: Nội dung tin báo & Tội danh
+    ("thoi_gian_dia_diem", "Thời gian & Địa điểm", 180),
+    ("noi_dung_tin_bao", "Nội dung tóm tắt nguồn tin", 300),
+    ("dieu_luat", "Thông tin điều luật / Tội danh", 240),
+    ("muc_do_nghiem_trong", "Mức độ tội", 140),
+
+    # Nhóm 4: Tiếp nhận & Thụ lý Kiểm sát
+    ("don_vi_tiep_nhan", "Đơn vị tiếp nhận ban đầu", 220),
+    ("ngay_tiep_nhan_tin", "Ngày tiếp nhận tin", 120),
+    ("ngay_cqdt_nhan", "Ngày CQĐT nhận", 120),
+    ("ngay_vks_nhan", "Ngày VKS nhận", 120),
+    ("so_thu_ly", "Số thụ lý VKS", 100),
+    ("ngay_vks_thu_ly", "Ngày VKS thụ lý", 120),
+    ("vks_thu_ly", "Đơn vị VKS thụ lý", 200),
+
+    # Nhóm 5: Thời hạn & Cảnh báo tiến độ
+    ("thoi_han_tu_ngay", "Hạn từ ngày", 110),
+    ("thoi_han_den_ngay", "Hạn đến ngày", 110),
+    ("so_ngay_con_lai", "Số ngày còn lại", 110),
+    ("muc_do_khan_cap", "Cảnh báo tiến độ", 180),
+
+    # Nhóm 6: Cán bộ & Kết quả giải quyết
+    ("ksv_chinh", "KSV Thụ lý chính", 180),
+    ("ksv_phoi_hop", "KSV phối hợp", 160),
+    ("don_vi_giai_quyet", "Đơn vị giải quyết", 180),
+    ("ket_qua_giai_quyet", "Kết quả giải quyết", 140),
+    ("so_bi_can_khoi_to", "Số bị can KT", 90),
+    ("ghi_chu", "Ghi chú", 160),
+]
+
+
+# Pre-compile các mẫu nhận dạng 63 Tỉnh/Thành phố để tối ưu tốc độ x100 lần khi xử lý dữ liệu nặng
+COMPILED_PROVINCE_RULES = []
+for _pname, _patterns in PROVINCE_RULES:
+    _escaped = [r"(?:\b|[\s,.\-_/])" + re.escape(p) + r"(?:\b|[\s,.\-_/]|$)" for p in _patterns]
+    COMPILED_PROVINCE_RULES.append((_pname, re.compile("|".join(_escaped), flags=re.IGNORECASE)))
+
+RE_FALLBACK_PROV = re.compile(r"(?:tỉnh|thành\s*phố|tp\.?|tx\.?)\s+([A-ZÀ-Ỹa-zà-ỹ\s]+?)(?:,|-|\.|$)", flags=re.IGNORECASE)
+RE_GIAI_DOAN_START = re.compile(r"^giai\s*đoạn\s*:", flags=re.IGNORECASE)
+RE_GIAI_DOAN_VAL = re.compile(r"^giai\s*đoạn\s*:\s*(.*)$", flags=re.IGNORECASE)
+RE_NGAY_SINH = re.compile(r"^(?:ngày\s*sinh|năm\s*sinh|ns)\s*:\s*(.*)$", flags=re.IGNORECASE)
+RE_CCCD = re.compile(r"^(?:cccd|số\s*cccd|cmnd|số\s*cmnd|đdcn|căn\s*cước[^:]*)\s*:\s*(.*)$", flags=re.IGNORECASE)
+
+
+def detect_province(cqdt_text, fallback_text=""):
+    """Đọc và nhận dạng Tỉnh/Thành phố từ chuỗi Cơ quan cảnh sát điều tra (Tối ưu tiền biên dịch)."""
+    if not cqdt_text and not fallback_text:
+        return "Chưa xác định"
+
+    target = (str(cqdt_text or "") + " " + str(fallback_text or "")).lower()
+
+    for prov_name, pattern_re in COMPILED_PROVINCE_RULES:
+        if pattern_re.search(target):
+            return prov_name
+
+    # Dự phòng: Bắt các cụm từ "tỉnh X", "thành phố Y", "tp Z"
+    m_tinh = RE_FALLBACK_PROV.search(target)
+    if m_tinh:
+        cand = m_tinh.group(1).strip().title()
+        if len(cand) >= 2 and cand.lower() not in ("công an", "cảnh sát", "điều tra", "hồ sơ"):
+            return cand
+
+    return "Khác / Chưa rõ"
+
+
+def clean_lines(cell_values):
+    lines = []
+    for val in cell_values:
+        if val is None:
+            continue
+        for sub in str(val).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            s = sub.strip()
+            if s and not s.startswith('="'):
+                lines.append(s)
+            elif s.startswith('="') and s.endswith('"'):
+                lines.append(s[2:-1].strip())
+    return lines
+
+
+def parse_qlahs_rows(raw_rows, progress_cb=None):
+    """Bóc tách danh sách dòng thô từ Excel QLAHS thành danh sách bản ghi 12 cột chuẩn."""
+    blocks = []
+    current_block = None
+
+    for row in raw_rows:
+        vals = [row[i] if i < len(row) else None for i in range(5)]
+        texts = []
+        for v in vals:
+            if v is None:
+                texts.append("")
+            else:
+                s = str(v).strip()
+                if s.startswith('="') and s.endswith('"'):
+                    s = s[2:-1].strip()
+                texts.append(s)
+
+        if not any(texts):
+            continue
+
+        c0_low = texts[0].lower()
+        c1_low = texts[1].lower()
+        c2_low = texts[2].lower()
+        if c0_low == "stt" or "thông tin hồ sơ" in c1_low or (c1_low == "" and c2_low == "họ tên"):
+            continue
+
+        b_lines = [x.strip() for x in texts[1].replace("\r\n", "\n").split("\n") if x.strip()]
+        starts_new_block = any(RE_GIAI_DOAN_START.search(ln) for ln in b_lines)
+
+        if starts_new_block:
+            if current_block is not None:
+                blocks.append(current_block)
+            current_block = {"A": [], "B": [], "C": [], "D": [], "E": []}
+
+        if current_block is None:
+            current_block = {"A": [], "B": [], "C": [], "D": [], "E": []}
+
+        for idx, key in enumerate(["A", "B", "C", "D", "E"]):
+            if texts[idx]:
+                current_block[key].append(texts[idx])
+
+    if current_block is not None and any(current_block.values()):
+        blocks.append(current_block)
+
+    total_blocks = len(blocks)
+    records = []
+    for idx, blk in enumerate(blocks, start=1):
+        if progress_cb and total_blocks > 300 and idx % 200 == 0:
+            progress_cb(
+                f"Đang chuẩn hóa & nhận dạng Tỉnh/Thành: {idx:,}/{total_blocks:,} bị can...",
+                "Đang phân tích các giai đoạn và điều luật..."
+            )
+
+        a_lines = clean_lines(blk["A"])
+        b_lines = clean_lines(blk["B"])
+        c_lines = clean_lines(blk["C"])
+        d_lines = clean_lines(blk["D"])
+        e_lines = clean_lines(blk["E"])
+
+        stt_val = idx
+        for a_ln in a_lines:
+            if a_ln.isdigit():
+                stt_val = int(a_ln)
+                break
+
+        giai_doan = ""
+        b_rem = []
+        for ln in b_lines:
+            m_gd = RE_GIAI_DOAN_VAL.match(ln)
+            if m_gd and not giai_doan:
+                giai_doan = m_gd.group(1).strip()
+            else:
+                b_rem.append(ln)
+
+        ma_vu_an, ten_vu_an, cqdt = "", "", ""
+        if len(b_rem) >= 3:
+            ma_vu_an = b_rem[0]
+            cqdt = b_rem[-1]
+            ten_vu_an = " - ".join(b_rem[1:-1])
+        elif len(b_rem) == 2:
+            ma_vu_an = b_rem[0]
+            if any(b_rem[1].lower().startswith(p) for p in CQDT_PREFIXES):
+                cqdt = b_rem[1]
+            else:
+                ten_vu_an = b_rem[1]
+        elif len(b_rem) == 1:
+            ma_vu_an = b_rem[0]
+
+        # Tự động đọc và nhận dạng Tỉnh/Thành bằng regex tiền biên dịch siêu tốc
+        tinh_thanh = detect_province(cqdt, ten_vu_an)
+
+        ngay_sinh, so_cccd = "", ""
+        c_rem = []
+        for ln in c_lines:
+            m_ns = RE_NGAY_SINH.match(ln)
+            m_cccd = RE_CCCD.match(ln)
+            if m_ns and not ngay_sinh:
+                ngay_sinh = m_ns.group(1).strip()
+            elif m_cccd and not so_cccd:
+                so_cccd = m_cccd.group(1).strip()
+            else:
+                c_rem.append(ln)
+
+        ma_bi_can, ten_bi_can = "", ""
+        if len(c_rem) >= 2:
+            ma_bi_can = c_rem[0]
+            ten_bi_can = " ".join(c_rem[1:])
+        elif len(c_rem) == 1:
+            if re.search(r"\d", c_rem[0]):
+                ma_bi_can = c_rem[0]
+            else:
+                ten_bi_can = c_rem[0]
+
+        dieu_luat = "; ".join(dict.fromkeys(d_lines))
+        trang_thai = "; ".join(dict.fromkeys(e_lines))
+
+        records.append({
+            "stt": stt_val,
+            "ma_vu_an": ma_vu_an,
+            "ten_vu_an": ten_vu_an,
+            "cqdt": cqdt,
+            "tinh_thanh": tinh_thanh,
+            "giai_doan": giai_doan,
+            "ma_bi_can": ma_bi_can,
+            "ten_bi_can": ten_bi_can,
+            "ngay_sinh": ngay_sinh,
+            "so_cccd": so_cccd,
+            "dieu_luat": dieu_luat,
+            "trang_thai": trang_thai,
+        })
+
+    return records
+
+
+def extract_officers_from_text(text):
+    """Trích xuất KSV, PVT, CV từ chuỗi văn bản tên vụ án (vd: (PVT Tùng, KSV Đông))."""
+    if not text:
+        return ""
+    m = re.search(r'\(([^)]*(?:ksv|pvt|cv|tp|ptp)[^)]*)\)', text, re.IGNORECASE)
+    if m:
+        parts = re.split(r'[,;|\-]', m.group(1).strip())
+        return "; ".join(p.strip() for p in parts if p.strip())
+    return ""
+
+def detect_file_unit(filename, raw_rows):
+    """Xác định đơn vị VKS phụ trách tệp dữ liệu dựa vào tên file và các mã mới trong file."""
+    fn = filename.lower() if filename else ""
+    # 1. Từ tên file (ví dụ: KHU_VỰC_1.DT.xlsx, KV01, phong_2...)
+    m_kv = re.search(r'khu[_\s]*v[ưu]c[_\s]*0*([1-9]|1[0-9])\b', fn)
+    if not m_kv:
+        m_kv = re.search(r'\bkv0*([1-9]|1[0-9])\b', fn)
+    if m_kv:
+        return f"Viện Kiểm sát nhân dân Khu vực {int(m_kv.group(1))} - Hồ Chí Minh"
+    
+    if "phòng 2" in fn or "phong_2" in fn or "p2" in fn:
+        return "Phòng Công tố và Kiểm sát điều tra, Kiểm sát xét xử sơ thẩm án trật tự xã hội (Phòng 2)"
+
+    # 2. Quét các mã mới có trong file để tìm đơn vị chủ đạo
+    kv_counts = {}
+    tp_count = 0
+    for row in raw_rows:
+        row_str = " ".join(str(c or "") for c in row)
+        for m in re.finditer(r'VA_E01\.59[._]0*([1-9]|1[0-9])_(\d{4})_(\d+)', row_str, re.I):
+            kv = int(m.group(1))
+            kv_counts[kv] = kv_counts.get(kv, 0) + 1
+        for m in re.finditer(r'VA_E01\.59_(\d{4})_(\d+)', row_str, re.I):
+            tp_count += 1
+
+    if kv_counts:
+        top_kv = max(kv_counts.items(), key=lambda x: x[1])[0]
+        return f"Viện Kiểm sát nhân dân Khu vực {top_kv} - Hồ Chí Minh"
+    if tp_count > 0:
+        return "VKSND Thành phố Hồ Chí Minh"
+    return None
+
+
+def parse_case_code_unit(case_code, file_context_unit=None):
+    """
+    Phân tích mã vụ án theo cấu trúc chuẩn QLAHS:
+    1. Mã mới có dấu gạch dưới _:
+       - Cấp Thành phố (các phòng nghiệp vụ):
+         VA_E01.59_YYMM_STT (ví dụ VA_E01.59_2610_0158) -> Không có cụm mã khu vực 3 chữ số
+         -> Trả về ("TP. Hồ Chí Minh", "VKSND Thành phố Hồ Chí Minh")
+       - Cấp Khu vực (Khu vực 1 -> 19):
+         VA_E01.59_XXX_YYMM_STT hoặc VA_E01.59.XXX_YYMM_STT (XXX: 001 -> 019)
+         -> Trả về ("TP. Hồ Chí Minh", f"Viện Kiểm sát nhân dân Khu vực {int(XXX)} - Hồ Chí Minh")
+    2. Mã cũ (dùng dấu chấm ., không có quy luật từ mã để suy ra đơn vị):
+       - Tuyệt đối không tự suy đoán Khu vực 1, 3, 8 từ các số trong mã cũ!
+       - Lấy theo file_context_unit (từ tên file / file context) nếu có, hoặc để 'Chưa xác định đơn vị (Mã cũ QLAHS)'.
+    """
+    if not case_code:
+        return "TP. Hồ Chí Minh", file_context_unit or "Chưa xác định đơn vị"
+
+    code = str(case_code).strip()
+
+    # 1.1. Mã mới VKS Khu vực
+    m_kv = re.search(r'VA_E01\.59[._]0*([1-9]|1[0-9])_(\d{4})_(\d+)', code, re.I)
+    if m_kv:
+        kv_num = int(m_kv.group(1))
+        if 1 <= kv_num <= 19:
+            return "TP. Hồ Chí Minh", f"Viện Kiểm sát nhân dân Khu vực {kv_num} - Hồ Chí Minh"
+
+    # 1.2. Mã mới VKS Thành phố (các phòng nghiệp vụ)
+    m_tp = re.search(r'VA_E01\.59_(\d{4})_(\d+)', code, re.I)
+    if m_tp:
+        if file_context_unit and "phòng" in file_context_unit.lower():
+            return "TP. Hồ Chí Minh", file_context_unit
+        return "TP. Hồ Chí Minh", "VKSND Thành phố Hồ Chí Minh"
+
+    # 2. Mã cũ (không có quy luật từ mã)
+    if file_context_unit:
+        return "TP. Hồ Chí Minh", file_context_unit
+    return "TP. Hồ Chí Minh", "Chưa xác định đơn vị (Mã cũ QLAHS)"
+
+
+def detect_district_from_case_code(case_code, default_unit=None):
+    """Alias tương thích ngược."""
+    return parse_case_code_unit(case_code, default_unit)
+
+def parse_qlahs_case_report_rows(raw_rows, progress_cb=None, filename=""):
+    file_context_unit = detect_file_unit(filename, raw_rows)
+    """Bóc tách Báo cáo danh sách hồ sơ vụ án (8 cột: STT, Thông tin vụ án, Loại tội, Tội, Thông tin bị can, Loại thụ lý, Trạng thái vụ án, Trạng thái biểu mẫu)."""
+    cases = []
+    header_idx = -1
+    for idx, row in enumerate(raw_rows[:10]):
+        row_str = " ".join(str(c or "").lower() for c in row)
+        if "thông tin vụ án" in row_str and ("loại tội" in row_str or "tội" in row_str):
+            header_idx = idx
+            break
+
+    start_idx = header_idx + 1 if header_idx != -1 else 0
+
+    for r_i, row in enumerate(raw_rows[start_idx:], 1):
+        if not row or not any(row):
+            continue
+        c1 = str(row[1] if len(row) > 1 and row[1] is not None else "").strip()
+        if not c1 or c1.lower() == "thông tin vụ án":
+            continue
+
+        c2 = str(row[2] if len(row) > 2 and row[2] is not None else "").strip()
+        c3 = str(row[3] if len(row) > 3 and row[3] is not None else "").strip()
+        c4 = str(row[4] if len(row) > 4 and row[4] is not None else "").strip()
+        c5 = str(row[5] if len(row) > 5 and row[5] is not None else "").strip()
+        c6 = str(row[6] if len(row) > 6 and row[6] is not None else "").strip()
+        c7 = str(row[7] if len(row) > 7 and row[7] is not None else "").strip()
+
+        lines = [ln.strip() for ln in c1.replace("\r\n", "\n").split("\n") if ln.strip()]
+        ma_va = lines[0] if lines else ""
+        ten_va = []
+        so_qd = ""
+        ngay_qd = ""
+        ngay_tn = ""
+        thoi_han = ""
+        canh_bao = ""
+
+        for ln in lines[1:]:
+            ln_low = ln.lower()
+            if ln_low.startswith("mã số qđ khởi tố vụ án:") or ln_low.startswith("số qđ khởi tố:"):
+                so_qd = ln.split(":", 1)[1].strip()
+            elif ln_low.startswith("ngày ra qđ khởi tố:"):
+                ngay_qd = ln.split(":", 1)[1].strip()
+            elif ln_low.startswith("ngày tiếp nhận hồ sơ:"):
+                ngay_tn = ln.split(":", 1)[1].strip()
+            elif ln_low.startswith("thời hạn xử lý:") or ln_low.startswith("thời hạn giải quyết:"):
+                thoi_han = ln.split(":", 1)[1].strip()
+            elif "quá hạn" in ln_low or "thời hiệu" in ln_low:
+                canh_bao = ln
+            else:
+                ten_va.append(ln)
+
+        full_ten_va = " - ".join(ten_va)
+        bc_dau_vu = ""
+        tong_bc = ""
+        if c4:
+            for bc_ln in c4.split("\n"):
+                bc_low = bc_ln.lower()
+                if "bị can đầu vụ:" in bc_low:
+                    bc_dau_vu = bc_ln.split(":", 1)[1].strip()
+                elif "tổng số bị can:" in bc_low:
+                    tong_bc = bc_ln.split(":", 1)[1].strip()
+                elif not bc_dau_vu:
+                    bc_dau_vu = bc_ln.strip()
+
+        prov, vks_tl = parse_case_code_unit(ma_va, file_context_unit)
+        ksv_from_text = extract_officers_from_text(full_ten_va)
+        ld_v, ld_p, ksv, cb_tl = split_officers(ksv_from_text, "")
+
+        cases.append({
+            "stt": len(cases) + 1,
+            "nguon_du_lieu": "DS1: Hồ sơ vụ án (Quá hạn ĐT)",
+            "ma_vu_an": ma_va,
+            "ten_vu_an": full_ten_va,
+            "tinh_thanh": prov,
+            "so_qd_khoi_to": so_qd,
+            "ngay_qd_khoi_to": ngay_qd,
+            "don_vi_khoi_to": "Công an Thành phố Hồ Chí Minh",
+            "so_thu_ly": "",
+            "ngay_thu_ly": ngay_tn,
+            "loai_thu_ly": c5 or "Thụ lý mới",
+            "vks_thu_ly": vks_tl,
+            "ngay_tiep_nhan": ngay_tn,
+            "thoi_han_giai_quyet": thoi_han,
+            "ngay_het_thoi_hieu": "",
+            "so_ngay_con_lai": "",
+            "muc_do_khan_cap": f"⚠️ {canh_bao}" if canh_bao else "Đang kiểm sát điều tra",
+            "canh_bao_thoi_hieu": canh_bao or "",
+            "bi_can_dau_vu": bc_dau_vu,
+            "tong_bi_can": tong_bc or ("1" if bc_dau_vu else "0"),
+            "dieu_luat": c3,
+            "loai_toi": c2,
+            "lanh_dao_vien": ld_v,
+            "lanh_dao_phong": ld_p,
+            "can_bo_giai_quyet": ksv,
+            "can_bo_thu_ly": cb_tl,
+            "giai_doan": "Điều tra",
+            "trang_thai_vu_an": c6 or "Điều tra: Đang THQCT và kiểm sát điều tra",
+            "trang_thai_bieu_mau": c7
+        })
+
+    return cases
+
+def reconcile_and_merge_multiple_case_lists(parsed_files, progress_cb=None):
+    """
+    Rà soát, đối chiếu và hợp nhất nhiều file QLAHS (2, 3, 4, ... N files).
+    Tự động so khớp theo Mã vụ án & Số QĐ khởi tố, bù đắp thông tin còn thiếu
+    từ tất cả các file để tạo danh sách hợp nhất 27 cột đầy đủ 100%.
+    
+    parsed_files: danh sách các tuple (tên_file, định_dạng, danh_sách_bản_ghi)
+    """
+    def norm_key(s):
+        return re.sub(r'[^a-zA-Z0-9]', '', str(s or '')).upper()
+
+    master_records = []
+    index_by_code = {}  # code_key -> index in master_records
+    index_by_qd = {}    # qd_key -> index in master_records
+    file_stats = []     # (fname, total, matched, new)
+    total_matches = 0
+
+    for file_idx, (fname, fmt, records) in enumerate(parsed_files):
+        if progress_cb:
+            progress_cb(
+                f"Đang so khớp & bù đắp dữ liệu Tập tin {file_idx + 1}/{len(parsed_files)}...",
+                f"{fname} ({len(records):,} vụ án)"
+            )
+
+        file_matched = 0
+        file_new = 0
+
+        for r in records:
+            code_k = norm_key(r.get("ma_vu_an"))
+            qd_k = norm_key(r.get("so_qd_khoi_to"))
+
+            target_idx = None
+            if code_k and code_k in index_by_code:
+                target_idx = index_by_code[code_k]
+            elif qd_k and qd_k in index_by_qd:
+                target_idx = index_by_qd[qd_k]
+
+            if target_idx is not None:
+                # Đã có trong danh sách -> Tiến hành bù đắp dữ liệu
+                target = master_records[target_idx]
+                file_matched += 1
+                total_matches += 1
+
+                sources = target.get("_sources", [])
+                if fname not in sources:
+                    sources.append(fname)
+                    target["_sources"] = sources
+                if len(sources) > 1:
+                    target["nguon_du_lieu"] = f"Khớp nối ({len(sources)} file): " + " + ".join(sources)
+                else:
+                    target["nguon_du_lieu"] = sources[0]
+
+                # Bù đắp từng trường thông tin còn trống
+                for k, v in r.items():
+                    if k.startswith("_"):
+                        continue
+                    if v and not target.get(k):
+                        target[k] = v
+
+                for fld in ("lanh_dao_vien", "lanh_dao_phong", "can_bo_giai_quyet", "can_bo_thu_ly"):
+                    if r.get(fld) and not target.get(fld):
+                        target[fld] = r[fld]
+
+                # Ưu tiên ghi nhận cảnh báo nếu file mới có
+                if r.get("canh_bao_qua_han"):
+                    target["canh_bao_thoi_hieu"] = r["canh_bao_qua_han"]
+                    target["muc_do_khan_cap"] = f"⚠️ {r['canh_bao_qua_han']}"
+                elif r.get("canh_bao_thoi_hieu") and not target.get("canh_bao_thoi_hieu"):
+                    target["canh_bao_thoi_hieu"] = r["canh_bao_thoi_hieu"]
+
+                if code_k and code_k not in index_by_code:
+                    index_by_code[code_k] = target_idx
+                if qd_k and qd_k not in index_by_qd:
+                    index_by_qd[qd_k] = target_idx
+            else:
+                # Vụ án mới -> Thêm vào master
+                file_new += 1
+                new_rec = dict(r)
+                new_rec["_sources"] = [fname]
+                new_rec["nguon_du_lieu"] = fname
+                if new_rec.get("canh_bao_qua_han"):
+                    new_rec["canh_bao_thoi_hieu"] = new_rec["canh_bao_qua_han"]
+                    new_rec["muc_do_khan_cap"] = f"⚠️ {new_rec['canh_bao_qua_han']}"
+
+                new_idx = len(master_records)
+                master_records.append(new_rec)
+
+                if code_k:
+                    index_by_code[code_k] = new_idx
+                if qd_k:
+                    index_by_qd[qd_k] = new_idx
+
+        file_stats.append({
+            "fname": fname,
+            "total": len(records),
+            "matched": file_matched,
+            "new": file_new,
+        })
+
+    # Cập nhật số thứ tự STT chuẩn hóa và dọn dẹp biến nội bộ
+    for idx, r in enumerate(master_records, 1):
+        r["stt"] = idx
+        r.pop("_sources", None)
+
+    return master_records, total_matches, file_stats
+
+
+def reconcile_and_merge_case_lists(list_a, list_b):
+    """Tương thích ngược đối chiếu 2 file"""
+    merged, match_n, _ = reconcile_and_merge_multiple_case_lists([
+        ("File 1", "CASE", list_a),
+        ("File 2", "CASE", list_b)
+    ])
+    return merged, match_n
+
+def detect_data_format(raw_rows):
+    """Tự động phân tích và nhận diện định dạng dữ liệu đầu vào từ QLAHS:
+    - 'TIN_BAO': Danh sách chi tiết nguồn tin báo về tội phạm
+    - 'CASE_REPORT': Báo cáo hồ sơ vụ án chi tiết
+    - 'CASE': Sổ vụ án / Sổ thụ lý / Án tạm đình chỉ / Sắp hết thời hiệu
+    - 'DEFENDANT': Danh sách quản lý bị can 5 cột thô ban đầu
+    """
+    sample_text = " ".join(" ".join(str(cell or "") for cell in row[:10]) for row in raw_rows[:25]).lower()
+    
+    # 1. Nhận diện Danh sách Tin báo về tội phạm
+    if (
+        "mã tin báo" in sample_text
+        or "tin báo" in sample_text
+        or "nguồn tin tội phạm" in sample_text
+        or "ngày cqđt nhận tin" in sample_text
+        or "thông tin xử lý tin báo" in sample_text
+        or ("nguồn tin" in sample_text and "người báo tin" in sample_text)
+    ):
+        return "TIN_BAO"
+
+    # 2. Nhận diện Báo cáo Hồ sơ vụ án
+    if "danh sách hồ sơ vụ án" in sample_text or ("thông tin vụ án" in sample_text and ("tội" in sample_text or "loại tội" in sample_text) and "loại thụ lý" in sample_text and "số thụ lý:" not in sample_text):
+        return "CASE_REPORT"
+
+    # 3. Nhận diện Sổ vụ án / Sổ thụ lý
+    if (
+        "thông tin vụ án" in sample_text
+        or "thông tin thụ lý" in sample_text
+        or "số thụ lý:" in sample_text
+        or "số qđ khởi tố:" in sample_text
+        or "thời hiệu" in sample_text
+        or "cán bộ thụ lý:" in sample_text
+        or "loại tội" in sample_text
+    ):
+        return "CASE"
+
+    return "DEFENDANT"
+
+
+def parse_qlahs_tin_bao_rows(raw_rows, progress_cb=None):
+    """
+    Tự động phân tích và chuẩn hóa danh sách tin báo về tội phạm từ QLAHS thành 30 cột chuẩn.
+    Hỗ trợ nhận diện cột động qua tiêu đề hoặc vị trí mặc định.
+    """
+    if not raw_rows:
+        return []
+
+    header_idx = -1
+    col_map = {}
+
+    for idx, row in enumerate(raw_rows[:10]):
+        row_str = " ".join(str(c or "").lower() for c in row)
+        if "mã tin báo" in row_str or "loại tin" in row_str or "thời hạn giải quyết" in row_str:
+            header_idx = idx
+            break
+
+    if header_idx != -1:
+        headers = [str(c or "").strip().lower() for c in raw_rows[header_idx]]
+        top_headers = [str(c or "").strip().lower() for c in raw_rows[header_idx - 1]] if header_idx > 0 else []
+
+        for c_idx, h in enumerate(headers):
+            top_h = top_headers[c_idx] if c_idx < len(top_headers) else ""
+            comb = f"{top_h} {h}".strip()
+
+            if "mã tin báo" in h or "mã tin" in h:
+                col_map["ma_tin_bao"] = c_idx
+            elif ("loại tin" in h and "báo" in h) or h == "loại tin":
+                col_map["loai_tin"] = c_idx
+            elif "nguồn tin" in h:
+                col_map["nguon_tin"] = c_idx
+            elif "tình tiết phức tạp" in h:
+                col_map["tinh_tiet_phuc_tap"] = c_idx
+            elif "thời hạn giải quyết từ" in h:
+                col_map["thoi_han_tu_ngay"] = c_idx
+            elif "thời hạn giải quyết đến" in h:
+                col_map["thoi_han_den_ngay"] = c_idx
+            elif "ngày tiếp nhận tin" in h:
+                col_map["ngay_tiep_nhan_tin"] = c_idx
+            elif "ngày cqđt nhận" in h:
+                col_map["ngay_cqdt_nhan"] = c_idx
+            elif "ngày vks nhận tin" in h:
+                col_map["ngay_vks_nhan"] = c_idx
+            elif "số thụ lý" in h and "thụ lý" in comb:
+                col_map["so_thu_ly"] = c_idx
+            elif "ngày vks thụ lý" in h:
+                col_map["ngay_vks_thu_ly"] = c_idx
+            elif "đơn vị thụ lý" in h:
+                col_map["vks_thu_ly"] = c_idx
+            elif "người báo tin" in h:
+                col_map["nguoi_bao_tin"] = c_idx
+            elif "cccd" in h or "cmnd" in h:
+                col_map["cccd_nguoi_bao"] = c_idx
+            elif "số điện thoại" in h or "sđt" in h:
+                col_map["sdt_nguoi_bao"] = c_idx
+            elif "địa chỉ" in h and ("người" in comb or "báo tin" in comb or c_idx < 30):
+                col_map["dia_chi_nguoi_bao"] = c_idx
+            elif "thời gian" in h and ("nội dung" in comb or c_idx >= 30):
+                col_map["thoi_gian"] = c_idx
+            elif "địa điểm" in h and ("nội dung" in comb or c_idx >= 30):
+                col_map["dia_diem"] = c_idx
+            elif "hành vi & hậu quả" in h or "hành vi" in h:
+                col_map["noi_dung_tin_bao"] = c_idx
+            elif "điều luật" in h:
+                col_map["dieu_luat"] = c_idx
+            elif "mức độ nghiêm trọng" in h:
+                col_map["muc_do_nghiem_trong"] = c_idx
+            elif "đơn vị tiếp nhận" in h and ("ban đầu" in comb or c_idx < 15):
+                col_map["don_vi_tiep_nhan"] = c_idx
+            elif "đơn vị giải quyết" in h or ("cơ quan giải quyết" in h and c_idx > 38):
+                col_map["don_vi_giai_quyet"] = c_idx
+            elif "kết quả giải quyết" in h:
+                col_map["ket_qua_giai_quyet"] = c_idx
+            elif "số lượng bị can khởi tố" in h or "bị can khởi tố" in h:
+                col_map["so_bi_can_khoi_to"] = c_idx
+            elif "ksv thụ lý chính" in h:
+                col_map["ksv_chinh"] = c_idx
+            elif h == "ksv" or "kiểm sát viên" in h:
+                col_map["ksv_phoi_hop"] = c_idx
+            elif "ghi chú" in h:
+                col_map["ghi_chu"] = c_idx
+
+        data_rows = raw_rows[header_idx + 1:]
+    else:
+        col_map = {
+            "loai_tin": 1, "ma_tin_bao": 2, "ngay_cqdt_nhan": 5, "ngay_vks_nhan": 6,
+            "nguon_tin": 7, "tinh_tiet_phuc_tap": 8, "thoi_han_tu_ngay": 9, "thoi_han_den_ngay": 10,
+            "ngay_tiep_nhan_tin": 11, "don_vi_tiep_nhan": 13, "so_thu_ly": 14, "ngay_vks_thu_ly": 15,
+            "vks_thu_ly": 16, "nguoi_bao_tin": 23, "dia_chi_nguoi_bao": 25, "cccd_nguoi_bao": 26,
+            "sdt_nguoi_bao": 28, "thoi_gian": 30, "dia_diem": 31, "noi_dung_tin_bao": 32,
+            "dieu_luat": 35, "muc_do_nghiem_trong": 37, "don_vi_giai_quyet": 41,
+            "so_bi_can_khoi_to": 43, "ket_qua_giai_quyet": 44, "ghi_chu": 46,
+            "ksv_phoi_hop": 55, "ksv_chinh": 56
+        }
+        data_rows = raw_rows[2:]
+
+    today_date = date.today()
+    records = []
+
+    def get_val(r, key):
+        idx = col_map.get(key)
+        if idx is not None and idx < len(r):
+            v = r[idx]
+            if v is not None:
+                return str(v).strip()
+        return ""
+
+    total_rows = len(data_rows)
+    for r_idx, r in enumerate(data_rows, 1):
+        if progress_cb and r_idx % 500 == 0:
+            progress_cb(f"Đang chuẩn hóa tin báo: {r_idx:,}/{total_rows:,} dòng...", "Tính toán hạn luật định & phân loại kết quả...")
+
+        if not r or not any(r):
+            continue
+        ma_tb = get_val(r, "ma_tin_bao")
+        so_tl = get_val(r, "so_thu_ly")
+        noi_dung = get_val(r, "noi_dung_tin_bao")
+        if not ma_tb and not so_tl and not noi_dung:
+            continue
+
+        th_tu = get_val(r, "thoi_han_tu_ngay")
+        th_den = get_val(r, "thoi_han_den_ngay")
+        ket_qua = get_val(r, "ket_qua_giai_quyet")
+
+        days_left_val = ""
+        urgency = "🟢 Đang giải quyết (Trong hạn)"
+
+        d_den = parse_date_safely(th_den)
+        is_finished = any(term in ket_qua.lower() for term in ("khởi tố", "không khởi tố", "tạm đình chỉ", "chuyển", "đã nhập"))
+
+        if is_finished:
+            urgency = f"✔ Đã giải quyết ({ket_qua})"
+            if d_den:
+                d_days = (d_den - today_date).days
+                days_left_val = f"{d_days} ngày"
+        elif d_den:
+            days_left = (d_den - today_date).days
+            days_left_val = days_left
+            if days_left < 0:
+                urgency = f"🔴 Quá hạn giải quyết ({-days_left} ngày)"
+            elif days_left <= 7:
+                urgency = f"🟠 Khẩn cấp (Còn {days_left} ngày)"
+            elif days_left <= 15:
+                urgency = f"🟡 Cảnh báo hạn (Còn {days_left} ngày)"
+            else:
+                urgency = f"🟢 Trong thời hạn (Còn {days_left} ngày)"
+        else:
+            urgency = f"⚪ {ket_qua or 'Chưa xác định thời hạn'}"
+
+        raw_ksv_c = get_val(r, "ksv_chinh")
+        raw_ksv_p = get_val(r, "ksv_phoi_hop")
+        clean_ksv_c = "; ".join(filter(None, [clean_person_name(x) for x in re.split(r'[,;|\n]+', raw_ksv_c)]))
+        clean_ksv_p = "; ".join(filter(None, [clean_person_name(x) for x in re.split(r'[,;|\n]+', raw_ksv_p)]))
+
+        tg = get_val(r, "thoi_gian")
+        dd = get_val(r, "dia_diem")
+        tg_dd = " - ".join(filter(None, [tg, dd]))
+
+        rec = {
+            "stt": len(records) + 1,
+            "ma_tin_bao": ma_tb,
+            "loai_tin": get_val(r, "loai_tin") or "Mới",
+            "nguon_tin": get_val(r, "nguon_tin") or "Tin báo",
+            "tinh_tiet_phuc_tap": "Có" if get_val(r, "tinh_tiet_phuc_tap").lower() in ("x", "1", "có", "true") else "Không",
+            
+            "nguoi_bao_tin": get_val(r, "nguoi_bao_tin"),
+            "cccd_nguoi_bao": get_val(r, "cccd_nguoi_bao"),
+            "sdt_nguoi_bao": get_val(r, "sdt_nguoi_bao"),
+            "dia_chi_nguoi_bao": get_val(r, "dia_chi_nguoi_bao"),
+            
+            "thoi_gian_dia_diem": tg_dd,
+            "noi_dung_tin_bao": noi_dung,
+            "dieu_luat": get_val(r, "dieu_luat"),
+            "muc_do_nghiem_trong": get_val(r, "muc_do_nghiem_trong"),
+            
+            "don_vi_tiep_nhan": get_val(r, "don_vi_tiep_nhan"),
+            "ngay_tiep_nhan_tin": get_val(r, "ngay_tiep_nhan_tin"),
+            "ngay_cqdt_nhan": get_val(r, "ngay_cqdt_nhan"),
+            "ngay_vks_nhan": get_val(r, "ngay_vks_nhan"),
+            
+            "so_thu_ly": so_tl,
+            "ngay_vks_thu_ly": get_val(r, "ngay_vks_thu_ly"),
+            "vks_thu_ly": get_val(r, "vks_thu_ly"),
+            
+            "thoi_han_tu_ngay": th_tu,
+            "thoi_han_den_ngay": th_den,
+            "so_ngay_con_lai": days_left_val,
+            "muc_do_khan_cap": urgency,
+            
+            "ksv_chinh": clean_ksv_c or clean_ksv_p,
+            "ksv_phoi_hop": clean_ksv_p if clean_ksv_c != clean_ksv_p else "",
+            "don_vi_giai_quyet": get_val(r, "don_vi_giai_quyet"),
+            "ket_qua_giai_quyet": ket_qua or "Đang giải quyết",
+            "so_bi_can_khoi_to": get_val(r, "so_bi_can_khoi_to") or "0",
+            "ghi_chu": get_val(r, "ghi_chu"),
+        }
+        records.append(rec)
+
+    return records
+
+
+def build_pivot_tin_bao_summary(records):
+    """Xây dựng bảng tổng hợp Pivot: Đơn vị VKS thụ lý × Kết quả giải quyết tin báo."""
+    common_order = ["Khởi tố", "Không khởi tố", "Tạm đình chỉ", "Đang giải quyết", "Chuyển nơi khác", "Không thụ lý", "Đã nhập"]
+    results_found = set()
+    units_found = set()
+    for r in records:
+        kq = r.get("ket_qua_giai_quyet", "").strip() or "Đang giải quyết"
+        results_found.add(kq)
+        u = r.get("vks_thu_ly", "").strip() or "Chưa rõ đơn vị VKS"
+        units_found.add(u)
+
+    sorted_results = [x for x in common_order if x in results_found]
+    for x in sorted(results_found):
+        if x not in sorted_results:
+            sorted_results.append(x)
+
+    matrix = {}
+    for u in units_found:
+        matrix[u] = {k: 0 for k in sorted_results}
+        matrix[u]["_total"] = 0
+
+    for r in records:
+        u = r.get("vks_thu_ly", "").strip() or "Chưa rõ đơn vị VKS"
+        kq = r.get("ket_qua_giai_quyet", "").strip() or "Đang giải quyết"
+        if u in matrix and kq in matrix[u]:
+            matrix[u][kq] += 1
+            matrix[u]["_total"] += 1
+
+    sorted_units = sorted(matrix.keys(), key=lambda x: matrix[x]["_total"], reverse=True)
+    return matrix, sorted_results, sorted_units
+
+
+def export_tin_bao_to_excel(records, out_filepath):
+    """Xuất file Excel chuẩn hóa Danh sách Tin báo về tội phạm 30 cột với 3 Sheet chuyên nghiệp."""
+    wb_out = openpyxl.Workbook()
+    ws1 = wb_out.active
+    ws1.title = "Danh_Sach_Tin_Bao_Chuan_Hoa"
+    ws1.views.sheetView[0].showGridLines = True
+
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1")
+    )
+    double_bottom_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="double", color="0F172A")
+    )
+
+    # Tiêu đề Header
+    ws1.merge_cells("A1:AD1")
+    ws1["A1"] = "VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH"
+    ws1["A1"].font = Font(name="Segoe UI", size=12, bold=True, color="FBBF24")
+    ws1["A1"].fill = PatternFill(start_color="07172C", end_color="07172C", fill_type="solid")
+    ws1["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[1].height = 28
+
+    ws1.merge_cells("A2:AD2")
+    ws1["A2"] = "DANH SÁCH CHI TIẾT NGUỒN TIN VỀ TỘI PHẠM & THỤ LÝ KIỂM SÁT (QLAHS)"
+    ws1["A2"].font = Font(name="Segoe UI", size=15, bold=True, color="FFFFFF")
+    ws1["A2"].fill = PatternFill(start_color="0B2545", end_color="0B2545", fill_type="solid")
+    ws1["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[2].height = 34
+
+    ws1.merge_cells("A3:AD3")
+    ws1["A3"] = f"★ Đã chuẩn hóa thành công: {len(records):,} nguồn tin về tội phạm - Theo dõi thời hạn, KSV thụ lý & Kết quả giải quyết ★"
+    ws1["A3"].font = Font(name="Segoe UI", size=10, bold=True, color="047857")
+    ws1["A3"].fill = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
+    ws1["A3"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[3].height = 24
+
+    # Row 4: 6 Nhóm Banner
+    GROUP_BANNERS = [
+        ("A4:E4", "1. NHẬN DIỆN & NGUỒN TIN", "0F2942", "F8FAFC"),
+        ("F4:I4", "2. NGƯỜI / TỔ CHỨC BÁO TIN", "1E3A8A", "DBEAFE"),
+        ("J4:M4", "3. NỘI DUNG NGUỒN TIN & TỘI DANH", "0E7490", "CFFAFE"),
+        ("N4:T4", "4. TIẾP NHẬN & THỤ LÝ KIỂM SÁT", "581C87", "F3E8FF"),
+        ("U4:X4", "5. THỜI HẠN & CẢNH BÁO TIẾN ĐỘ", "991B1B", "FEE2E2"),
+        ("Y4:AD4", "6. CÁN BỘ & KẾT QUẢ GIẢI QUYẾT", "166534", "DCFCE7"),
+    ]
+    ws1.row_dimensions[4].height = 24
+    for range_str, g_title, bg_color, text_color in GROUP_BANNERS:
+        ws1.merge_cells(range_str)
+        top_cell = ws1[range_str.split(":")[0]]
+        top_cell.value = g_title
+        top_cell.font = Font(name="Segoe UI", size=10, bold=True, color=text_color)
+        top_cell.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+        top_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # Row 5: Column Headers
+    COLUMNS_TB_FULL = [
+        ("stt", "STT", 6, "center", "0F2942"),
+        ("ma_tin_bao", "Mã tin báo", 22, "center", "0F2942"),
+        ("loai_tin", "Loại tin", 14, "center", "0F2942"),
+        ("nguon_tin", "Nguồn tin", 16, "center", "0F2942"),
+        ("tinh_tiet_phuc_tap", "Phức tạp", 12, "center", "0F2942"),
+
+        ("nguoi_bao_tin", "Người / Tổ chức báo tin", 24, "left", "1E3A8A"),
+        ("cccd_nguoi_bao", "CCCD / Định danh", 18, "center", "1E3A8A"),
+        ("sdt_nguoi_bao", "Số điện thoại", 15, "center", "1E3A8A"),
+        ("dia_chi_nguoi_bao", "Địa chỉ người báo tin", 26, "left", "1E3A8A"),
+
+        ("thoi_gian_dia_diem", "Thời gian & Địa điểm", 22, "left", "0E7490"),
+        ("noi_dung_tin_bao", "Nội dung tóm tắt nguồn tin / Hành vi", 42, "left", "0E7490"),
+        ("dieu_luat", "Thông tin điều luật / Tội danh", 32, "left", "0E7490"),
+        ("muc_do_nghiem_trong", "Mức độ tội phạm", 18, "center", "0E7490"),
+
+        ("don_vi_tiep_nhan", "Đơn vị tiếp nhận ban đầu", 28, "left", "581C87"),
+        ("ngay_tiep_nhan_tin", "Ngày tiếp nhận tin", 16, "center", "581C87"),
+        ("ngay_cqdt_nhan", "Ngày CQĐT nhận", 16, "center", "581C87"),
+        ("ngay_vks_nhan", "Ngày VKS nhận", 16, "center", "581C87"),
+        ("so_thu_ly", "Số thụ lý VKS", 14, "center", "581C87"),
+        ("ngay_vks_thu_ly", "Ngày VKS thụ lý", 16, "center", "581C87"),
+        ("vks_thu_ly", "Đơn vị VKS thụ lý", 26, "left", "581C87"),
+
+        ("thoi_han_tu_ngay", "Thời hạn từ ngày", 16, "center", "991B1B"),
+        ("thoi_han_den_ngay", "Thời hạn đến ngày", 16, "center", "991B1B"),
+        ("so_ngay_con_lai", "Số ngày còn lại", 15, "center", "991B1B"),
+        ("muc_do_khan_cap", "Cảnh báo tiến độ / Khẩn cấp", 26, "center", "991B1B"),
+
+        ("ksv_chinh", "KSV Thụ lý chính", 24, "left", "166534"),
+        ("ksv_phoi_hop", "KSV phối hợp / GQ", 22, "left", "166534"),
+        ("don_vi_giai_quyet", "Đơn vị giải quyết", 22, "left", "166534"),
+        ("ket_qua_giai_quyet", "Kết quả giải quyết", 18, "center", "166534"),
+        ("so_bi_can_khoi_to", "Số bị can KT", 14, "center", "166534"),
+        ("ghi_chu", "Ghi chú", 22, "left", "334155"),
+    ]
+
+    ws1.row_dimensions[5].height = 28
+    for col_idx, (col_key, col_title, width, align, bg_c) in enumerate(COLUMNS_TB_FULL, 1):
+        cell = ws1.cell(row=5, column=col_idx)
+        cell.value = col_title
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color=bg_c, end_color=bg_c, fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+        col_letter = get_column_letter(col_idx)
+        ws1.column_dimensions[col_letter].width = width
+
+    fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    fill_zebra = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    fill_red = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    font_red = Font(name="Segoe UI", size=9, bold=True, color="991B1B")
+    fill_amber = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    font_amber = Font(name="Segoe UI", size=9, bold=True, color="92400E")
+    fill_green = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+    font_green = Font(name="Segoe UI", size=9, bold=True, color="166534")
+
+    DATE_FIELDS = {"ngay_tiep_nhan_tin", "ngay_cqdt_nhan", "ngay_vks_nhan", "ngay_vks_thu_ly", "thoi_han_tu_ngay", "thoi_han_den_ngay"}
+
+    for r_idx, rec in enumerate(records, 6):
+        ws1.row_dimensions[r_idx].height = 23
+        row_fill = fill_zebra if r_idx % 2 == 0 else fill_white
+
+        for c_idx, (col_key, _, _, align, _) in enumerate(COLUMNS_TB_FULL, 1):
+            cell = ws1.cell(row=r_idx, column=c_idx)
+            val = rec.get(col_key, "")
+
+            if col_key == "stt":
+                cell.value = r_idx - 5
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif col_key in DATE_FIELDS:
+                dt_obj = parse_date_safely(val)
+                if dt_obj:
+                    cell.value = dt_obj
+                    cell.number_format = "DD/MM/YYYY"
+                else:
+                    cell.value = str(val or "")
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif col_key == "so_ngay_con_lai":
+                if val is not None and str(val).strip() != "":
+                    try:
+                        cell.value = int(val)
+                    except ValueError:
+                        cell.value = str(val)
+                else:
+                    cell.value = ""
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif col_key in ("so_thu_ly", "cccd_nguoi_bao", "sdt_nguoi_bao"):
+                cell.value = str(val or "")
+                cell.number_format = "@"
+                cell.alignment = Alignment(horizontal=align, vertical="center")
+            else:
+                cell.value = str(val or "")
+                cell.alignment = Alignment(horizontal=align, vertical="center")
+
+            cell.border = thin_border
+            cell.fill = row_fill
+            cell.font = Font(name="Segoe UI", size=9)
+
+            if col_key == "muc_do_khan_cap" and val:
+                val_str = str(val)
+                if "🔴" in val_str or "quá hạn" in val_str.lower():
+                    cell.fill = fill_red
+                    cell.font = font_red
+                elif "🟠" in val_str or "khẩn cấp" in val_str.lower():
+                    cell.fill = fill_amber
+                    cell.font = font_amber
+                elif "✔" in val_str or "đã giải quyết" in val_str.lower():
+                    cell.fill = fill_green
+                    cell.font = font_green
+
+    ws1.auto_filter.ref = f"A5:AD{len(records) + 5}"
+    ws1.freeze_panes = "C6"
+
+    # ==========================================
+    # SHEET 2: BÁO CÁO TIẾN ĐỘ TIN BÁO
+    # ==========================================
+    ws2 = wb_out.create_sheet(title="Bao_Cao_Tien_Do_Tin_Bao")
+    ws2.views.sheetView[0].showGridLines = True
+
+    ws2.merge_cells("A1:E1")
+    ws2["A1"] = "BÁO CÁO TỔNG HỢP TIẾN ĐỘ & KẾT QUẢ GIẢI QUYẾT NGUỒN TIN TỘI PHẠM"
+    ws2["A1"].font = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
+    ws2["A1"].fill = PatternFill(start_color="0B2545", end_color="0B2545", fill_type="solid")
+    ws2["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 32
+
+    total_tb = len(records)
+    thu_ly_vks = sum(1 for r in records if r.get("so_thu_ly"))
+    khoi_to = sum(1 for r in records if "khởi tố" in str(r.get("ket_qua_giai_quyet", "")).lower() and "không" not in str(r.get("ket_qua_giai_quyet", "")).lower())
+    khong_kt = sum(1 for r in records if "không khởi tố" in str(r.get("ket_qua_giai_quyet", "")).lower())
+    tam_dinh_chi = sum(1 for r in records if "tạm đình chỉ" in str(r.get("ket_qua_giai_quyet", "")).lower())
+    dang_gq = sum(1 for r in records if "đang giải quyết" in str(r.get("ket_qua_giai_quyet", "")).lower())
+    chuyen_noi_khac = sum(1 for r in records if "chuyển" in str(r.get("ket_qua_giai_quyet", "")).lower())
+    qua_han = sum(1 for r in records if "quá hạn" in str(r.get("muc_do_khan_cap", "")).lower())
+    khan_cap = sum(1 for r in records if "khẩn cấp" in str(r.get("muc_do_khan_cap", "")).lower() or "cảnh báo" in str(r.get("muc_do_khan_cap", "")).lower())
+
+    metrics = [
+        ("Tổng số nguồn tin về tội phạm tiếp nhận & kiểm sát", total_tb, "Toàn bộ tin báo, tố giác tội phạm từ QLAHS"),
+        ("Số nguồn tin VKSND đã thụ lý kiểm sát", thu_ly_vks, f"Đạt tỷ lệ {(thu_ly_vks/total_tb*100):.1f}% tổng số tin tiếp nhận"),
+        ("Số nguồn tin đã ra Quyết định Khởi tố vụ án hình sự", khoi_to, "Cơ quan điều tra / VKS đã ban hành QĐ khởi tố"),
+        ("Số nguồn tin đã ra Quyết định Không khởi tố vụ án", khong_kt, "Không có dấu hiệu tội phạm hoặc căn cứ không khởi tố"),
+        ("Số nguồn tin Tạm đình chỉ giải quyết", tam_dinh_chi, "Chờ kết quả giám định, định giá hoặc tương trợ tư pháp"),
+        ("Số nguồn tin Hiện đang trong quá trình giải quyết", dang_gq, "Đang được CQĐT và VKS phối hợp xác minh"),
+        ("Số nguồn tin Đã chuyển xử lý hoặc chuyển nơi khác", chuyen_noi_khac, "Chuyển đơn vị có thẩm quyền giải quyết"),
+        ("Số nguồn tin Cảnh báo Quá hạn giải quyết", qua_han, "Cần lãnh đạo VKS chỉ đạo KSV đôn đốc giải quyết ngay"),
+        ("Số nguồn tin Sắp hết hạn giải quyết (dưới 15 ngày)", khan_cap, "Cần tập trung xác minh hoàn tất giải quyết"),
+    ]
+
+    headers_s2 = ["STT", "Chỉ số tiếp nhận, thụ lý & giải quyết tin báo", "Số lượng", "Đơn vị tính", "Ghi chú & Đánh giá nghiệp vụ"]
+    ws2.row_dimensions[3].height = 24
+    for c_idx, h in enumerate(headers_s2, 1):
+        cell = ws2.cell(row=3, column=c_idx, value=h)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="0F2942", end_color="0F2942", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    for m_idx, (m_title, m_val, m_note) in enumerate(metrics, 4):
+        ws2.row_dimensions[m_idx].height = 22
+        ws2.cell(row=m_idx, column=1, value=m_idx - 3).alignment = Alignment(horizontal="center", vertical="center")
+        ws2.cell(row=m_idx, column=2, value=m_title).alignment = Alignment(horizontal="left", vertical="center")
+        c3 = ws2.cell(row=m_idx, column=3, value=m_val)
+        c3.alignment = Alignment(horizontal="center", vertical="center")
+        c3.font = Font(name="Segoe UI", size=10, bold=True, color="1E3A8A" if "quá hạn" not in m_title.lower() else "991B1B")
+        ws2.cell(row=m_idx, column=4, value="Tin báo").alignment = Alignment(horizontal="center", vertical="center")
+        ws2.cell(row=m_idx, column=5, value=m_note).alignment = Alignment(horizontal="left", vertical="center")
+        for c in range(1, 6):
+            ws2.cell(row=m_idx, column=c).border = thin_border
+
+    start_r2 = len(metrics) + 6
+    ws2.merge_cells(f"A{start_r2}:F{start_r2}")
+    t2_cell = ws2[f"A{start_r2}"]
+    t2_cell.value = "THỐNG KÊ CHI TIẾT SỐ LƯỢNG TIN BÁO THEO TỪNG KIỂM SÁT VIÊN THỤ LÝ CHÍNH"
+    t2_cell.font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    t2_cell.fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
+    t2_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[start_r2].height = 26
+
+    ksv_counts = {}
+    for r in records:
+        ksv = r.get("ksv_chinh", "").strip() or "Chưa phân công KSV"
+        if ksv not in ksv_counts:
+            ksv_counts[ksv] = {"total": 0, "khoi_to": 0, "tam_dinh_chi": 0, "dang_gq": 0}
+        ksv_counts[ksv]["total"] += 1
+        kq = str(r.get("ket_qua_giai_quyet", "")).lower()
+        if "khởi tố" in kq and "không" not in kq:
+            ksv_counts[ksv]["khoi_to"] += 1
+        elif "tạm đình chỉ" in kq:
+            ksv_counts[ksv]["tam_dinh_chi"] += 1
+        elif "đang giải quyết" in kq:
+            ksv_counts[ksv]["dang_gq"] += 1
+
+    headers_ksv = ["STT", "Họ và tên Kiểm sát viên", "Tổng số tin thụ lý", "Đã khởi tố", "Tạm đình chỉ", "Đang giải quyết", "Tỷ lệ %"]
+    ws2.row_dimensions[start_r2 + 1].height = 24
+    for c_idx, h in enumerate(headers_ksv, 1):
+        cell = ws2.cell(row=start_r2 + 1, column=c_idx, value=h)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="14532D", end_color="14532D", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    sorted_ksvs = sorted(ksv_counts.keys(), key=lambda x: ksv_counts[x]["total"], reverse=True)
+    for k_idx, ksv_name in enumerate(sorted_ksvs, start_r2 + 2):
+        ws2.row_dimensions[k_idx].height = 22
+        ws2.cell(row=k_idx, column=1, value=k_idx - start_r2 - 1).alignment = Alignment(horizontal="center", vertical="center")
+        ws2.cell(row=k_idx, column=2, value=ksv_name).alignment = Alignment(horizontal="left", vertical="center")
+        
+        stat = ksv_counts[ksv_name]
+        c_tot = ws2.cell(row=k_idx, column=3, value=stat["total"])
+        c_tot.alignment = Alignment(horizontal="center", vertical="center")
+        c_tot.font = Font(name="Segoe UI", size=9, bold=True)
+        
+        ws2.cell(row=k_idx, column=4, value=stat["khoi_to"]).alignment = Alignment(horizontal="center", vertical="center")
+        ws2.cell(row=k_idx, column=5, value=stat["tam_dinh_chi"]).alignment = Alignment(horizontal="center", vertical="center")
+        ws2.cell(row=k_idx, column=6, value=stat["dang_gq"]).alignment = Alignment(horizontal="center", vertical="center")
+        
+        pct_ksv = (stat["total"] / total_tb * 100) if total_tb else 0
+        ws2.cell(row=k_idx, column=7, value=f"{pct_ksv:.1f}%").alignment = Alignment(horizontal="center", vertical="center")
+
+        for c in range(1, 8):
+            ws2.cell(row=k_idx, column=c).border = thin_border
+
+    ws2.column_dimensions["A"].width = 8
+    ws2.column_dimensions["B"].width = 32
+    ws2.column_dimensions["C"].width = 20
+    ws2.column_dimensions["D"].width = 16
+    ws2.column_dimensions["E"].width = 16
+    ws2.column_dimensions["F"].width = 18
+    ws2.column_dimensions["G"].width = 14
+
+    # ==========================================
+    # SHEET 3: PIVOT TABLE TỔNG HỢP VKS x KẾT QUẢ GIẢI QUYẾT
+    # ==========================================
+    ws3 = wb_out.create_sheet(title="Ma_Tran_Pivot_Tin_Bao")
+    ws3.views.sheetView[0].showGridLines = True
+
+    matrix, sorted_results, sorted_units = build_pivot_tin_bao_summary(records)
+
+    total_cols = 3 + len(sorted_results) + 1
+    last_col_letter = get_column_letter(total_cols)
+
+    ws3.merge_cells(f"A1:{last_col_letter}1")
+    ws3["A1"] = "BẢNG MA TRẬN PIVOT TABLE TỔNG HỢP NGUỒN TIN THEO ĐƠN VỊ VKS & KẾT QUẢ GIẢI QUYẾT"
+    ws3["A1"].font = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
+    ws3["A1"].fill = PatternFill(start_color="0B2545", end_color="0B2545", fill_type="solid")
+    ws3["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws3.row_dimensions[1].height = 32
+
+    headers_p = ["STT", "Đơn vị VKS thụ lý kiểm sát", "Tổng số tin báo"] + sorted_results + ["Tỷ lệ %"]
+    ws3.row_dimensions[3].height = 26
+    for c_idx, h in enumerate(headers_p, 1):
+        cell = ws3.cell(row=3, column=c_idx, value=h)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="1E3A8A" if c_idx <= 3 else "0E7490", end_color="1E3A8A" if c_idx <= 3 else "0E7490", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    col_totals = {r: 0 for r in sorted_results}
+
+    for u_idx, u_name in enumerate(sorted_units, 4):
+        ws3.row_dimensions[u_idx].height = 22
+        ws3.cell(row=u_idx, column=1, value=u_idx - 3).alignment = Alignment(horizontal="center", vertical="center")
+        ws3.cell(row=u_idx, column=2, value=u_name).alignment = Alignment(horizontal="left", vertical="center")
+        
+        tot = matrix[u_name]["_total"]
+        c_tot = ws3.cell(row=u_idx, column=3, value=tot)
+        c_tot.alignment = Alignment(horizontal="center", vertical="center")
+        c_tot.font = Font(name="Segoe UI", size=10, bold=True, color="1E3A8A")
+
+        for c_offset, r_key in enumerate(sorted_results, 4):
+            cnt_val = matrix[u_name][r_key]
+            col_totals[r_key] += cnt_val
+            cell = ws3.cell(row=u_idx, column=c_offset, value=cnt_val)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.font = Font(name="Segoe UI", size=9)
+
+        pct = (tot / total_tb * 100) if total_tb else 0
+        ws3.cell(row=u_idx, column=total_cols, value=f"{pct:.1f}%").alignment = Alignment(horizontal="center", vertical="center")
+
+        for c in range(1, total_cols + 1):
+            ws3.cell(row=u_idx, column=c).border = thin_border
+
+    sum_row = len(sorted_units) + 4
+    ws3.row_dimensions[sum_row].height = 26
+    ws3.cell(row=sum_row, column=1, value="Σ").alignment = Alignment(horizontal="center", vertical="center")
+    ws3.cell(row=sum_row, column=2, value="TỔNG CỘNG CHUNG").alignment = Alignment(horizontal="center", vertical="center")
+    ws3.cell(row=sum_row, column=3, value=total_tb).alignment = Alignment(horizontal="center", vertical="center")
+    
+    for c_offset, r_key in enumerate(sorted_results, 4):
+        ws3.cell(row=sum_row, column=c_offset, value=col_totals[r_key]).alignment = Alignment(horizontal="center", vertical="center")
+
+    ws3.cell(row=sum_row, column=total_cols, value="100.0%").alignment = Alignment(horizontal="center", vertical="center")
+
+    fill_sum = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    font_sum = Font(name="Segoe UI", size=10, bold=True, color="78350F")
+    for c in range(1, total_cols + 1):
+        cell = ws3.cell(row=sum_row, column=c)
+        cell.fill = fill_sum
+        cell.font = font_sum
+        cell.border = double_bottom_border
+
+    ws3.column_dimensions["A"].width = 8
+    ws3.column_dimensions["B"].width = 30
+    ws3.column_dimensions["C"].width = 16
+    for c_offset in range(4, total_cols):
+        ws3.column_dimensions[get_column_letter(c_offset)].width = 18
+    ws3.column_dimensions[get_column_letter(total_cols)].width = 14
+
+    wb_out.save(out_filepath)
+
+
+def parse_qlahs_case_rows(raw_rows, progress_cb=None):
+    """Bóc tách dữ liệu Sổ vụ án / Sổ thụ lý / Án tạm đình chỉ thành 24 cột chuẩn."""
+    blocks = []
+    current = []
+
+    for row in raw_rows:
+        if not row:
+            continue
+        c0 = row[0] if len(row) > 0 else None
+        c1 = row[1] if len(row) > 1 else None
+
+        c0_s = str(c0 or "").strip()
+        c1_s = str(c1 or "").strip()
+
+        # Bỏ qua dòng tiêu đề lặp lại trong file QLAHS xuất ra
+        if c0_s.lower() == "stt" or "thông tin vụ án" in c1_s.lower():
+            continue
+
+        if c0_s.isdigit():
+            if current:
+                blocks.append(current)
+            current = []
+
+        if any(v is not None and str(v).strip() for v in row):
+            current.append(row)
+
+    if current:
+        blocks.append(current)
+
+    total_blocks = len(blocks)
+    records = []
+
+    for idx, blk in enumerate(blocks, 1):
+        if progress_cb and total_blocks > 100 and idx % 50 == 0:
+            progress_cb(
+                f"Đang chuẩn hóa sổ vụ án: {idx:,}/{total_blocks:,} vụ án...",
+                "Đang bóc tách số QĐ, thời hiệu, thụ lý và KSV..."
+            )
+
+        rec = {k: "" for k, _, _ in COLUMNS_CASE_24}
+        rec["stt"] = idx
+        ten_lines = []
+
+        for r_idx, row in enumerate(blk):
+            v_va = str(row[1] if len(row) > 1 and row[1] is not None else "").strip().replace("\xa0", " ")
+            v_tl = str(row[2] if len(row) > 2 and row[2] is not None else "").strip().replace("\xa0", " ")
+            v_bc = str(row[3] if len(row) > 3 and row[3] is not None else "").strip().replace("\xa0", " ")
+            v_td = str(row[4] if len(row) > 4 and row[4] is not None else "").strip().replace("\xa0", " ")
+            v_lt = str(row[5] if len(row) > 5 and row[5] is not None else "").strip().replace("\xa0", " ")
+            v_cb = str(row[6] if len(row) > 6 and row[6] is not None else "").strip().replace("\xa0", " ")
+            v_tt = str(row[7] if len(row) > 7 and row[7] is not None else "").strip().replace("\xa0", " ")
+            v_bm = str(row[8] if len(row) > 8 and row[8] is not None else "").strip().replace("\xa0", " ")
+
+            if r_idx == 0 and v_va.startswith("VA_"):
+                rec["ma_vu_an"] = v_va
+            elif v_va:
+                v_low = v_va.lower()
+                if v_low.startswith("số qđ khởi tố:"):
+                    rec["so_qd_khoi_to"] = v_va.split(":", 1)[1].strip()
+                elif v_low.startswith("ngày ra qđ khởi tố:"):
+                    rec["ngay_qd_khoi_to"] = v_va.split(":", 1)[1].strip()
+                elif v_low.startswith("đơn vị ra qđ khởi tố:"):
+                    rec["don_vi_khoi_to"] = v_va.split(":", 1)[1].strip()
+                elif v_low.startswith("ngày tiếp nhận hồ sơ:"):
+                    rec["ngay_tiep_nhan"] = v_va.split(":", 1)[1].strip()
+                elif v_low.startswith("thời hạn giải quyết:"):
+                    rec["thoi_han_giai_quyet"] = v_va.split(":", 1)[1].strip()
+                elif v_low.startswith("ngày hết thời hiệu"):
+                    rec["ngay_het_thoi_hieu"] = v_va.split(":", 1)[1].strip()
+                elif "thời hiệu" in v_low:
+                    rec["canh_bao_thoi_hieu"] = v_va
+                else:
+                    ten_lines.append(v_va)
+
+            if v_tl:
+                v_tl_low = v_tl.lower()
+                if v_tl_low.startswith("số thụ lý:"):
+                    rec["so_thu_ly"] = v_tl.split(":", 1)[1].strip()
+                elif v_tl_low.startswith("ngày thụ lý:"):
+                    rec["ngay_thu_ly"] = v_tl.split(":", 1)[1].strip()
+                elif v_tl_low.startswith("loại thụ lý:"):
+                    rec["loai_thu_ly"] = v_tl.split(":", 1)[1].strip()
+                elif v_tl_low.startswith("đơn vị vks thụ lý:"):
+                    rec["vks_thu_ly"] = v_tl.split(":", 1)[1].strip()
+
+            if v_bc:
+                v_bc_low = v_bc.lower()
+                if v_bc_low.startswith("bị can đầu vụ:"):
+                    rec["bi_can_dau_vu"] = v_bc.split(":", 1)[1].strip()
+                elif v_bc_low.startswith("tổng bị can khởi tố:"):
+                    rec["tong_bi_can"] = v_bc.split(":", 1)[1].strip()
+                elif not rec["bi_can_dau_vu"]:
+                    rec["bi_can_dau_vu"] = v_bc
+
+            if v_td:
+                if rec["dieu_luat"]:
+                    rec["dieu_luat"] += " | " + v_td
+                else:
+                    rec["dieu_luat"] = v_td
+
+            if v_lt and not rec["loai_toi"]:
+                rec["loai_toi"] = v_lt
+
+            if v_cb:
+                v_cb_low = v_cb.lower()
+                if v_cb_low.startswith("cán bộ thụ lý:"):
+                    rec["can_bo_thu_ly"] = v_cb.split(":", 1)[1].strip()
+                elif v_cb_low.startswith("cán bộ giải quyết:"):
+                    rec["can_bo_giai_quyet"] = v_cb.split(":", 1)[1].strip()
+                else:
+                    if rec["can_bo_giai_quyet"]:
+                        rec["can_bo_giai_quyet"] += "; " + v_cb
+                    else:
+                        rec["can_bo_giai_quyet"] = v_cb
+
+            if v_tt:
+                if ":" in v_tt:
+                    parts = v_tt.split(":", 1)
+                    rec["giai_doan"] = parts[0].strip()
+                    rec["trang_thai_vu_an"] = parts[1].strip()
+                else:
+                    rec["trang_thai_vu_an"] = v_tt
+
+            if v_bm:
+                if rec["trang_thai_bieu_mau"]:
+                    rec["trang_thai_bieu_mau"] += "; " + v_bm
+                else:
+                    rec["trang_thai_bieu_mau"] = v_bm
+
+        # Phân tách chính xác Lãnh đạo Viện, Lãnh đạo Phòng, KSV và Cán bộ thụ lý
+        ld_v, ld_p, ksv, cb_tl = split_officers(rec.get("can_bo_giai_quyet", ""), rec.get("can_bo_thu_ly", ""))
+        rec["lanh_dao_vien"] = ld_v
+        rec["lanh_dao_phong"] = ld_p
+        rec["can_bo_giai_quyet"] = ksv
+        rec["can_bo_thu_ly"] = cb_tl
+
+        rec["ten_vu_an"] = " - ".join(ten_lines)
+        prov = detect_province(rec["don_vi_khoi_to"], rec["vks_thu_ly"] + " " + rec["ten_vu_an"])
+        if prov in ("Khác / Chưa rõ", "Chưa xác định") and (
+            "hồ chí minh" in (rec["vks_thu_ly"] + " " + rec["ten_vu_an"]).lower()
+            or "hải quan" in rec["don_vi_khoi_to"].lower()
+        ):
+            prov = "TP. Hồ Chí Minh"
+        rec["tinh_thanh"] = prov
+
+        # Tính toán mức độ khẩn cấp & số ngày còn lại đến thời hiệu
+        today_date = date.today()
+        d_het_han = parse_date_safely(rec.get("ngay_het_thoi_hieu"))
+        if d_het_han:
+            days_left = (d_het_han - today_date).days
+            if days_left < 0:
+                rec["so_ngay_con_lai"] = f"Đã quá {-days_left} ngày"
+                rec["muc_do_khan_cap"] = f"⚠️ Đã quá hạn ({-days_left} ngày)"
+            elif days_left <= 7:
+                rec["so_ngay_con_lai"] = f"Còn {days_left} ngày"
+                rec["muc_do_khan_cap"] = f"🔴 Khẩn cấp (Còn {days_left} ngày)"
+            elif days_left <= 15:
+                rec["so_ngay_con_lai"] = f"Còn {days_left} ngày"
+                rec["muc_do_khan_cap"] = f"🟠 Rất gấp (Còn {days_left} ngày)"
+            elif days_left <= 30:
+                rec["so_ngay_con_lai"] = f"Còn {days_left} ngày"
+                rec["muc_do_khan_cap"] = f"🟡 Sắp hết hạn (Còn {days_left} ngày)"
+            else:
+                rec["so_ngay_con_lai"] = f"Còn {days_left} ngày"
+                rec["muc_do_khan_cap"] = f"🟢 Bình thường (Còn {days_left} ngày)"
+        else:
+            rec["so_ngay_con_lai"] = ""
+            rec["muc_do_khan_cap"] = "Chưa rõ thời hiệu"
+
+        records.append(rec)
+
+    return records
+
+
+def load_excel_and_parse(filepath, progress_cb=None):
+    """Đọc file Excel và chuẩn hóa dữ liệu, hỗ trợ tiến trình và tối ưu luồng bộ nhớ."""
+    if progress_cb:
+        progress_cb("Đang mở và đọc cấu trúc tập tin Excel...", os.path.basename(filepath))
+
+    raw_rows = []
+    # Thử đọc nhanh bằng read_only=True
+    try:
+        wb = openpyxl.load_workbook(filepath, data_only=True, read_only=True)
+        ws = wb.active
+        count = 0
+        for row in ws.iter_rows(values_only=True):
+            count += 1
+            raw_rows.append(list(row) if row else [])
+            if progress_cb and count % 500 == 0:
+                progress_cb(
+                    f"Đang tải dữ liệu Excel: đã nạp {count:,} dòng...",
+                    os.path.basename(filepath)
+                )
+        wb.close()
+    except Exception:
+        # Dự phòng mở tiêu chuẩn nếu file có định dạng đặc thù
+        wb = openpyxl.load_workbook(filepath, data_only=True)
+        ws = wb.active
+        max_r = ws.max_row
+        max_c = min(ws.max_column, 80)
+        for r in range(1, max_r + 1):
+            raw_rows.append([ws.cell(row=r, column=c).value for c in range(1, max_c + 1)])
+            if progress_cb and r % 500 == 0:
+                progress_cb(
+                    f"Đang tải dữ liệu Excel: {r:,}/{max_r:,} dòng...",
+                    os.path.basename(filepath)
+                )
+        wb.close()
+
+    fmt = detect_data_format(raw_rows)
+    if fmt == "TIN_BAO":
+        if progress_cb:
+            progress_cb(
+                f"Phát hiện định dạng Danh sách Tin báo về tội phạm ({len(raw_rows):,} dòng)...",
+                "Đang bóc tách 30 cột chuẩn hóa, thời hạn & kiểm sát viên..."
+            )
+        recs = parse_qlahs_tin_bao_rows(raw_rows, progress_cb)
+    elif fmt == "CASE_REPORT":
+        if progress_cb:
+            progress_cb(
+                f"Phát hiện định dạng Báo cáo Hồ sơ vụ án ({len(raw_rows):,} dòng)...",
+                "Đang bóc tách thông tin vụ án, hạn điều tra & cán bộ..."
+            )
+        recs = parse_qlahs_case_report_rows(raw_rows, progress_cb, filename=os.path.basename(filepath))
+    elif fmt == "CASE":
+        if progress_cb:
+            progress_cb(
+                f"Phát hiện định dạng Sổ Vụ án / Thụ lý ({len(raw_rows):,} dòng)...",
+                "Đang bóc tách 24 cột chuẩn hóa chi tiết..."
+            )
+        recs = parse_qlahs_case_rows(raw_rows, progress_cb)
+    else:
+        if progress_cb:
+            progress_cb(
+                f"Phát hiện định dạng Sổ Bị can ({len(raw_rows):,} dòng)...",
+                "Đang bóc tách 12 cột chuẩn hóa..."
+            )
+        recs = parse_qlahs_rows(raw_rows, progress_cb)
+
+    return fmt, recs
+
+
+def parse_clipboard_data(clip_text, progress_cb=None):
+    """Phân tích dữ liệu dán từ clipboard và tự động nhận diện định dạng."""
+    lines = clip_text.replace("\r\n", "\n").split("\n")
+    raw_rows = [line.split("\t") for line in lines if line.strip()]
+    fmt = detect_data_format(raw_rows)
+    if fmt == "TIN_BAO":
+        if progress_cb:
+            progress_cb(f"Nhận diện định dạng Tin báo tội phạm ({len(raw_rows):,} dòng)...", "Đang bóc tách 30 cột...")
+        recs = parse_qlahs_tin_bao_rows(raw_rows, progress_cb)
+    elif fmt == "CASE" or fmt == "CASE_REPORT":
+        if progress_cb:
+            progress_cb(f"Nhận diện định dạng Sổ Vụ án ({len(raw_rows):,} dòng)...", "Đang bóc tách 24 cột...")
+        recs = parse_qlahs_case_rows(raw_rows, progress_cb)
+    else:
+        if progress_cb:
+            progress_cb(f"Nhận diện định dạng Sổ Bị can ({len(raw_rows):,} dòng)...", "Đang bóc tách 12 cột...")
+        recs = parse_qlahs_rows(raw_rows, progress_cb)
+    return fmt, recs
+
+
+def build_pivot_case_summary(records):
+    """Tính toán ma trận Pivot Table cho Sổ vụ án: Đơn vị VKS thụ lý × Phân loại tội phạm."""
+    if not records:
+        return {}, [], []
+
+    crime_types_order = ["Ít nghiêm trọng", "Nghiêm trọng", "Rất nghiêm trọng", "Đặc biệt nghiêm trọng"]
+    found_types = []
+    for r in records:
+        lt = r.get("loai_toi", "").strip() or "Chưa phân loại"
+        if lt not in found_types:
+            found_types.append(lt)
+
+    crime_cols = [c for c in crime_types_order if c in found_types]
+    for c in found_types:
+        if c not in crime_cols:
+            crime_cols.append(c)
+
+    matrix = {}
+    for r in records:
+        unit = r.get("vks_thu_ly", "").strip() or "Chưa rõ đơn vị"
+        lt = r.get("loai_toi", "").strip() or "Chưa phân loại"
+
+        if unit not in matrix:
+            matrix[unit] = {
+                "total_cases": 0,
+                "crimes": {c: 0 for c in crime_cols},
+            }
+        matrix[unit]["total_cases"] += 1
+        if lt not in matrix[unit]["crimes"]:
+            matrix[unit]["crimes"][lt] = 0
+        matrix[unit]["crimes"][lt] += 1
+
+    sorted_units = sorted(matrix.keys(), key=lambda u: matrix[u]["total_cases"], reverse=True)
+    return matrix, crime_cols, sorted_units
+
+
+def export_case_records_to_excel(records, out_filepath):
+    """Xuất file Excel Sổ vụ án chuyên nghiệp với định dạng ngày tháng chuẩn Excel,
+    phân nhóm tiêu đề 2 cấp, tô màu khẩn cấp, bật AutoFilter và cố định dòng cột."""
+    wb = openpyxl.Workbook()
+    ws1 = wb.active
+    ws1.title = "Danh_Sach_Vu_An_Chuan_Hoa"
+    ws1.views.sheetView[0].showGridLines = True
+
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+    double_bottom_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="double", color="0F172A"),
+    )
+
+    # 26 Cột chuẩn hóa theo đúng cấu trúc nghiệp vụ
+    COLUMNS_26 = [
+        ("stt", "STT", 6, "center", "0F2942"),
+        ("ma_vu_an", "Mã vụ án", 28, "center", "0F2942"),
+        ("ten_vu_an", "Tên vụ án / Nội dung / QĐ TĐC", 38, "left", "0F2942"),
+        ("tinh_thanh", "Tỉnh / Thành phố", 18, "center", "0F2942"),
+        ("so_qd_khoi_to", "Số QĐ khởi tố", 14, "center", "1E3A8A"),
+        ("ngay_qd_khoi_to", "Ngày ra QĐ khởi tố", 16, "center", "1E3A8A"),
+        ("don_vi_khoi_to", "Đơn vị ra QĐ khởi tố", 30, "left", "1E3A8A"),
+        ("so_thu_ly", "Số thụ lý", 14, "center", "0E7490"),
+        ("ngay_thu_ly", "Ngày thụ lý", 16, "center", "0E7490"),
+        ("loai_thu_ly", "Loại thụ lý", 16, "center", "0E7490"),
+        ("vks_thu_ly", "Đơn vị VKS thụ lý", 34, "left", "0E7490"),
+        ("ngay_tiep_nhan", "Ngày tiếp nhận hồ sơ", 16, "center", "991B1B"),
+        ("thoi_han_giai_quyet", "Thời hạn giải quyết", 16, "center", "991B1B"),
+        ("ngay_het_thoi_hieu", "Ngày hết thời hiệu TNHS", 18, "center", "991B1B"),
+        ("so_ngay_con_lai", "Số ngày còn lại", 15, "center", "991B1B"),
+        ("muc_do_khan_cap", "Mức độ khẩn cấp", 24, "center", "991B1B"),
+        ("canh_bao_thoi_hieu", "Cảnh báo thời hiệu", 26, "center", "991B1B"),
+        ("bi_can_dau_vu", "Bị can đầu vụ & CCCD", 26, "left", "4C1D95"),
+        ("tong_bi_can", "Tổng số bị can", 14, "center", "4C1D95"),
+        ("dieu_luat", "Thông tin tội danh / Điều luật", 36, "left", "4C1D95"),
+        ("loai_toi", "Phân loại tội", 18, "center", "4C1D95"),
+        ("can_bo_thu_ly", "Cán bộ thụ lý", 18, "left", "334155"),
+        ("can_bo_giai_quyet", "Cán bộ giải quyết (KSV)", 28, "left", "334155"),
+        ("giai_doan", "Giai đoạn tố tụng", 16, "center", "334155"),
+        ("trang_thai_vu_an", "Trạng thái vụ án", 22, "center", "334155"),
+        ("trang_thai_bieu_mau", "Trạng thái biểu mẫu", 22, "left", "334155"),
+    ]
+
+    # Banner Header (Rows 1-3)
+    ws1.merge_cells("A1:Z1")
+    ws1["A1"] = "VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH"
+    ws1["A1"].font = Font(name="Segoe UI", size=12, bold=True, color="FBBF24")
+    ws1["A1"].fill = PatternFill(start_color="07172C", end_color="07172C", fill_type="solid")
+    ws1["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[1].height = 28
+
+    ws1.merge_cells("A2:Z2")
+    ws1["A2"] = "BẢNG CHUẨN HÓA DỮ LIỆU SỔ THỤ LÝ & THEO DÕI THỜI HIỆU TRUY CỨU TNHS"
+    ws1["A2"].font = Font(name="Segoe UI", size=15, bold=True, color="FFFFFF")
+    ws1["A2"].fill = PatternFill(start_color="0B2545", end_color="0B2545", fill_type="solid")
+    ws1["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[2].height = 34
+
+    ws1.merge_cells("A3:Z3")
+    ws1["A3"] = f"★ Tự động chuẩn hóa dữ liệu QLAHS - Tổng số: {len(records)} vụ án - 100% Bảo mật Offline ★"
+    ws1["A3"].font = Font(name="Segoe UI", size=10, bold=True, color="991B1B")
+    ws1["A3"].fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    ws1["A3"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[3].height = 24
+
+    # Row 4: Group Header Banners
+    GROUP_BANNERS = [
+        ("A4:D4", "1. THÔNG TIN VỤ ÁN", "0F2942", "F8FAFC"),
+        ("E4:G4", "2. QUYẾT ĐỊNH KHỞI TỐ", "1E3A8A", "DBEAFE"),
+        ("H4:K4", "3. THỤ LÝ KIỂM SÁT", "0E7490", "CFFAFE"),
+        ("L4:Q4", "4. TIẾN ĐỘ & CẢNH BÁO THỜI HIỆU TNHS (ĐẶC BIỆT CHÚ Ý)", "991B1B", "FEE2E2"),
+        ("R4:U4", "5. BỊ CAN & TỘI DANH", "4C1D95", "EDE9FE"),
+        ("V4:Z4", "6. PHÂN CÔNG & TRẠNG THÁI TỐ TỤNG", "334155", "F1F5F9"),
+    ]
+    ws1.row_dimensions[4].height = 24
+    for range_str, g_title, bg_color, text_color in GROUP_BANNERS:
+        ws1.merge_cells(range_str)
+        top_cell = ws1[range_str.split(":")[0]]
+        top_cell.value = g_title
+        top_cell.font = Font(name="Segoe UI", size=10, bold=True, color=text_color)
+        top_cell.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+        top_cell.alignment = Alignment(horizontal="center", vertical="center")
+        for row_c in ws1[range_str]:
+            for c in row_c:
+                c.border = thin_border
+                c.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+
+    # Row 5: Column Headers
+    ws1.row_dimensions[5].height = 32
+    for col_idx, (k, title, width, align, bg_color) in enumerate(COLUMNS_26, 1):
+        cell = ws1.cell(row=5, column=col_idx, value=title)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+        col_letter = get_column_letter(col_idx)
+        ws1.column_dimensions[col_letter].width = width
+
+    fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    fill_slate = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    fill_urgent_red = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    fill_urgent_amber = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    fill_urgent_yellow = PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid")
+
+    font_urgent_red = Font(name="Segoe UI", size=9, bold=True, color="991B1B")
+    font_urgent_amber = Font(name="Segoe UI", size=9, bold=True, color="92400E")
+    font_urgent_yellow = Font(name="Segoe UI", size=9, bold=True, color="854D0E")
+    font_regular = Font(name="Segoe UI", size=9, color="0F172A")
+    font_bold = Font(name="Segoe UI", size=9, bold=True, color="0F172A")
+    font_date = Font(name="Segoe UI", size=9, bold=True, color="1E293B")
+
+    date_field_keys = {"ngay_qd_khoi_to", "ngay_thu_ly", "ngay_tiep_nhan", "thoi_han_giai_quyet", "ngay_het_thoi_hieu"}
+    today_date = date.today()
+
+    for r_idx, rec in enumerate(records, 6):
+        ws1.row_dimensions[r_idx].height = 24
+        base_fill = fill_white if r_idx % 2 == 0 else fill_slate
+
+        d_het_han = parse_date_safely(rec.get("ngay_het_thoi_hieu"))
+        days_left = (d_het_han - today_date).days if d_het_han else None
+
+        if days_left is not None:
+            if days_left <= 7:
+                urgency_fill = fill_urgent_red
+                urgency_font = font_urgent_red
+            elif days_left <= 15:
+                urgency_fill = fill_urgent_amber
+                urgency_font = font_urgent_amber
+            else:
+                urgency_fill = fill_urgent_yellow
+                urgency_font = font_urgent_yellow
+        else:
+            urgency_fill = base_fill
+            urgency_font = font_regular
+
+        for c_idx, (k, _, _, align, _) in enumerate(COLUMNS_26, 1):
+            cell = ws1.cell(row=r_idx, column=c_idx)
+            val = rec.get(k, "")
+            cell.border = thin_border
+
+            if k in date_field_keys:
+                d_val = parse_date_safely(val)
+                if d_val:
+                    cell.value = d_val
+                    cell.number_format = 'DD/MM/YYYY'
+                else:
+                    cell.value = str(val or "")
+                    cell.number_format = '@'
+                cell.font = font_date
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                if k == "ngay_het_thoi_hieu":
+                    cell.fill = urgency_fill
+                    cell.font = urgency_font
+                else:
+                    cell.fill = base_fill
+            elif k in ("so_ngay_con_lai", "muc_do_khan_cap", "canh_bao_thoi_hieu"):
+                cell.value = str(val or "")
+                cell.number_format = '@'
+                cell.fill = urgency_fill
+                cell.font = urgency_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif k in ("loai_toi",):
+                cell.value = str(val or "")
+                cell.number_format = '@'
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                lt_low = str(val).lower()
+                if "rất nghiêm trọng" in lt_low or "đặc biệt" in lt_low:
+                    cell.fill = fill_urgent_red
+                    cell.font = font_urgent_red
+                elif "nghiêm trọng" in lt_low:
+                    cell.fill = fill_urgent_amber
+                    cell.font = font_urgent_amber
+                elif "ít nghiêm trọng" in lt_low:
+                    cell.fill = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")
+                    cell.font = Font(name="Segoe UI", size=9, bold=True, color="1D4ED8")
+                else:
+                    cell.fill = base_fill
+                    cell.font = font_regular
+            else:
+                cell.value = val
+                cell.fill = base_fill
+                cell.font = font_bold if k in ("ma_vu_an", "stt", "tong_bi_can") else font_regular
+                cell.alignment = Alignment(horizontal=align, vertical="center")
+                if k in ("stt", "tong_bi_can") and isinstance(val, int):
+                    cell.number_format = '#,##0'
+                else:
+                    cell.number_format = '@'
+
+    # AutoFilter on row 5 and FreezePanes at C6
+    ws1.auto_filter.ref = f"A5:Z{ws1.max_row}"
+    ws1.freeze_panes = "C6"
+
+    # Sheet 2: Bảng Pivot Table Tổng Hợp & Đối Soát Thời Hiệu
+    ws2 = wb.create_sheet("Tong_Hop_Pivot_Table")
+    ws2.views.sheetView[0].showGridLines = True
+
+    ws2.merge_cells("A1:G1")
+    ws2["A1"] = "BẢNG TỔNG HỢP & MA TRẬN ĐỐI SOÁT THỜI HIỆU TRUY CỨU TNHS THEO ĐƠN VỊ VKS"
+    ws2["A1"].font = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
+    ws2["A1"].fill = PatternFill(start_color="0B2545", end_color="0B2545", fill_type="solid")
+    ws2["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 32
+
+    # Phần 1: Bảng theo dõi khẩn cấp thời hiệu
+    ws2.merge_cells("A3:F3")
+    ws2["A3"] = "PHẦN 1: THEO DÕI MỨC ĐỘ KHẨN CẤP THỜI HIỆU TNHS (TÍNH ĐẾN HÔM NAY)"
+    ws2["A3"].font = Font(name="Segoe UI", size=10, bold=True, color="991B1B")
+    ws2["A3"].fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    ws2["A3"].alignment = Alignment(horizontal="left", vertical="center")
+    ws2.row_dimensions[3].height = 24
+
+    headers_u = ["STT", "Đơn vị VKS thụ lý", "Tổng số vụ", "🔴 Khẩn cấp (≤ 7 ngày)", "🟠 Rất gấp (8-15 ngày)", "🟡 Sắp hết hạn (16-30 ngày)", "Tỷ lệ %"]
+    ws2.row_dimensions[4].height = 28
+    for c_i, h in enumerate(headers_u, 1):
+        cell = ws2.cell(row=4, column=c_i, value=h)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="991B1B" if c_i in (4, 5, 6) else "0F2942", end_color="991B1B" if c_i in (4, 5, 6) else "0F2942", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    unit_stats = {}
+    for r in records:
+        u = str(r.get("vks_thu_ly") or "").strip() or "Chưa rõ VKS"
+        if u not in unit_stats:
+            unit_stats[u] = {"total": 0, "under_7": 0, "8_to_15": 0, "16_to_30": 0, "crimes": {}}
+        unit_stats[u]["total"] += 1
+
+        d_h = parse_date_safely(r.get("ngay_het_thoi_hieu"))
+        diff = (d_h - today_date).days if d_h else 999
+        if diff <= 7:
+            unit_stats[u]["under_7"] += 1
+        elif diff <= 15:
+            unit_stats[u]["8_to_15"] += 1
+        else:
+            unit_stats[u]["16_to_30"] += 1
+
+        lt = str(r.get("loai_toi") or "").strip() or "Chưa phân loại"
+        unit_stats[u]["crimes"][lt] = unit_stats[u]["crimes"].get(lt, 0) + 1
+
+    sorted_units = sorted(unit_stats.keys(), key=lambda x: unit_stats[x]["under_7"], reverse=True)
+    tot_all = len(records)
+    cur_r = 5
+
+    for idx, u in enumerate(sorted_units, 1):
+        st = unit_stats[u]
+        pct = st["total"] / tot_all * 100 if tot_all else 0
+        ws2.row_dimensions[cur_r].height = 22
+        r_f = fill_white if idx % 2 == 0 else fill_slate
+        row_vals = [idx, u, st["total"], st["under_7"], st["8_to_15"], st["16_to_30"], f"{pct:.1f}%"]
+        for c_i, val in enumerate(row_vals, 1):
+            c = ws2.cell(row=cur_r, column=c_i, value=val)
+            c.border = thin_border
+            c.font = font_regular
+            c.fill = r_f
+            if c_i == 4 and val > 0:
+                c.fill = fill_urgent_red
+                c.font = font_urgent_red
+            elif c_i == 5 and val > 0:
+                c.fill = fill_urgent_amber
+                c.font = font_urgent_amber
+            elif c_i == 6 and val > 0:
+                c.fill = fill_urgent_yellow
+                c.font = font_urgent_yellow
+            c.alignment = Alignment(horizontal="left" if c_i == 2 else "center", vertical="center")
+        cur_r += 1
+
+    # Totals Row Part 1
+    tot_under_7 = sum(unit_stats[u]["under_7"] for u in sorted_units)
+    tot_8_to_15 = sum(unit_stats[u]["8_to_15"] for u in sorted_units)
+    tot_16_to_30 = sum(unit_stats[u]["16_to_30"] for u in sorted_units)
+    ws2.row_dimensions[cur_r].height = 26
+    tot_vals = ["∑", "TỔNG CỘNG CHUNG", tot_all, tot_under_7, tot_8_to_15, tot_16_to_30, "100.0%"]
+    for c_i, val in enumerate(tot_vals, 1):
+        c = ws2.cell(row=cur_r, column=c_i, value=val)
+        c.fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+        c.font = Font(name="Segoe UI", size=9, bold=True, color="991B1B")
+        c.border = double_bottom_border
+        c.alignment = Alignment(horizontal="left" if c_i == 2 else "center", vertical="center")
+    cur_r += 3
+
+    # Phần 2: Bảng phân loại mức độ tội phạm
+    ws2.merge_cells(f"A{cur_r}:F{cur_r}")
+    ws2[f"A{cur_r}"] = "PHẦN 2: ĐỐI SOÁT PHÂN LOẠI MỨC ĐỘ NGHIÊM TRỌNG CỦA TỘI PHẠM THEO ĐƠN VỊ VKS"
+    ws2[f"A{cur_r}"].font = Font(name="Segoe UI", size=10, bold=True, color="1E3A8A")
+    ws2[f"A{cur_r}"].fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
+    ws2[f"A{cur_r}"].alignment = Alignment(horizontal="left", vertical="center")
+    ws2.row_dimensions[cur_r].height = 24
+    cur_r += 1
+
+    headers_c = ["STT", "Đơn vị VKS thụ lý", "Tổng số vụ", "Ít nghiêm trọng", "Nghiêm trọng", "Rất nghiêm trọng", "Tỷ lệ %"]
+    ws2.row_dimensions[cur_r].height = 28
+    for c_i, h in enumerate(headers_c, 1):
+        cell = ws2.cell(row=cur_r, column=c_i, value=h)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+    cur_r += 1
+
+    sorted_units_name = sorted(unit_stats.keys(), key=lambda x: unit_stats[x]["total"], reverse=True)
+    for idx, u in enumerate(sorted_units_name, 1):
+        st = unit_stats[u]
+        pct = st["total"] / tot_all * 100 if tot_all else 0
+        ws2.row_dimensions[cur_r].height = 22
+        r_f = fill_white if idx % 2 == 0 else fill_slate
+        it_nt = st["crimes"].get("Ít nghiêm trọng", 0)
+        nt = st["crimes"].get("Nghiêm trọng", 0)
+        rat_nt = st["crimes"].get("Rất nghiêm trọng", 0)
+        row_vals = [idx, u, st["total"], it_nt, nt, rat_nt, f"{pct:.1f}%"]
+        for c_i, val in enumerate(row_vals, 1):
+            c = ws2.cell(row=cur_r, column=c_i, value=val)
+            c.border = thin_border
+            c.font = font_regular
+            c.fill = r_f
+            c.alignment = Alignment(horizontal="left" if c_i == 2 else "center", vertical="center")
+        cur_r += 1
+
+    # Totals Row Part 2
+    tot_it_nt = sum(unit_stats[u]["crimes"].get("Ít nghiêm trọng", 0) for u in sorted_units_name)
+    tot_nt = sum(unit_stats[u]["crimes"].get("Nghiêm trọng", 0) for u in sorted_units_name)
+    tot_rat_nt = sum(unit_stats[u]["crimes"].get("Rất nghiêm trọng", 0) for u in sorted_units_name)
+    ws2.row_dimensions[cur_r].height = 26
+    tot_vals_2 = ["∑", "TỔNG CỘNG CHUNG", tot_all, tot_it_nt, tot_nt, tot_rat_nt, "100.0%"]
+    for c_i, val in enumerate(tot_vals_2, 1):
+        c = ws2.cell(row=cur_r, column=c_i, value=val)
+        c.fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+        c.font = Font(name="Segoe UI", size=9, bold=True, color="B45309")
+        c.border = double_bottom_border
+        c.alignment = Alignment(horizontal="left" if c_i == 2 else "center", vertical="center")
+
+    ws2.column_dimensions["A"].width = 8
+    ws2.column_dimensions["B"].width = 38
+    ws2.column_dimensions["C"].width = 16
+    ws2.column_dimensions["D"].width = 24
+    ws2.column_dimensions["E"].width = 24
+    ws2.column_dimensions["F"].width = 26
+    ws2.column_dimensions["G"].width = 14
+
+    wb.save(out_filepath)
+
+
+
+
+def export_reconciliation_excel(records, out_filepath):
+    """Xuất file Excel đối chiếu & rà soát dữ liệu 29 cột chuyên nghiệp,
+    bao gồm 3 Sheet: Danh sách hợp nhất, Báo cáo phân công lãnh đạo & đối chiếu, và Ma trận Pivot Table."""
+    wb_out = openpyxl.Workbook()
+    ws1 = wb_out.active
+    ws1.title = "Danh_Sach_Hop_Nhat_Chuan_Hoa"
+    ws1.views.sheetView[0].showGridLines = True
+    
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1")
+    )
+    double_bottom_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="double", color="0F172A")
+    )
+    
+    # 29 Columns (với Lãnh đạo Viện & Lãnh đạo Phòng tách riêng)
+    COLUMNS_29 = [
+        ("stt", "STT", 6, "center", "0F2942"),
+        ("nguon_du_lieu", "Nguồn dữ liệu đối chiếu", 24, "center", "0F2942"),
+        ("ma_vu_an", "Mã vụ án", 28, "center", "0F2942"),
+        ("ten_vu_an", "Tên vụ án / Nội dung / QĐ TĐC", 38, "left", "0F2942"),
+        ("tinh_thanh", "Tỉnh / Thành phố", 18, "center", "0F2942"),
+        
+        ("so_qd_khoi_to", "Số QĐ khởi tố", 14, "center", "1E3A8A"),
+        ("ngay_qd_khoi_to", "Ngày ra QĐ khởi tố", 16, "center", "1E3A8A"),
+        ("don_vi_khoi_to", "Đơn vị ra QĐ khởi tố", 30, "left", "1E3A8A"),
+        
+        ("so_thu_ly", "Số thụ lý", 14, "center", "0E7490"),
+        ("ngay_thu_ly", "Ngày thụ lý", 16, "center", "0E7490"),
+        ("loai_thu_ly", "Loại thụ lý", 16, "center", "0E7490"),
+        ("vks_thu_ly", "Đơn vị VKS thụ lý", 34, "left", "0E7490"),
+        
+        ("ngay_tiep_nhan", "Ngày tiếp nhận hồ sơ", 16, "center", "991B1B"),
+        ("thoi_han_giai_quyet", "Thời hạn giải quyết / Xử lý", 16, "center", "991B1B"),
+        ("ngay_het_thoi_hieu", "Ngày hết thời hiệu TNHS", 18, "center", "991B1B"),
+        ("so_ngay_con_lai", "Số ngày còn lại", 15, "center", "991B1B"),
+        ("muc_do_khan_cap", "Cảnh báo tiến độ / Khẩn cấp", 28, "center", "991B1B"),
+        ("canh_bao_thoi_hieu", "Cảnh báo chi tiết", 28, "center", "991B1B"),
+        
+        ("bi_can_dau_vu", "Bị can đầu vụ & CCCD", 26, "left", "166534"),
+        ("tong_bi_can", "Tổng số bị can", 14, "center", "166534"),
+        ("dieu_luat", "Thông tin tội danh / Điều luật", 36, "left", "166534"),
+        ("loai_toi", "Phân loại tội", 18, "center", "166534"),
+        
+        ("lanh_dao_vien", "Lãnh đạo Viện phụ trách", 24, "center", "581C87"),
+        ("lanh_dao_phong", "Lãnh đạo Phòng phụ trách", 28, "center", "581C87"),
+        ("can_bo_giai_quyet", "Kiểm sát viên giải quyết", 28, "left", "581C87"),
+        ("can_bo_thu_ly", "Cán bộ thụ lý / Chuyên viên", 22, "left", "581C87"),
+
+        ("giai_doan", "Giai đoạn tố tụng", 16, "center", "334155"),
+        ("trang_thai_vu_an", "Trạng thái vụ án", 24, "center", "334155"),
+        ("trang_thai_bieu_mau", "Trạng thái biểu mẫu", 22, "left", "334155"),
+    ]
+    
+    # Rows 1-3 Banner Title
+    ws1.merge_cells("A1:AC1")
+    ws1["A1"] = "VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH"
+    ws1["A1"].font = Font(name="Segoe UI", size=12, bold=True, color="FBBF24")
+    ws1["A1"].fill = PatternFill(start_color="07172C", end_color="07172C", fill_type="solid")
+    ws1["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[1].height = 28
+    
+    ws1.merge_cells("A2:AC2")
+    ws1["A2"] = "KẾT QUẢ RÀ SOÁT, ĐỐI CHIẾU & HỢP NHẤT DỮ LIỆU ĐA NGUỒN QLAHS"
+    ws1["A2"].font = Font(name="Segoe UI", size=15, bold=True, color="FFFFFF")
+    ws1["A2"].fill = PatternFill(start_color="0B2545", end_color="0B2545", fill_type="solid")
+    ws1["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[2].height = 34
+    
+    ws1.merge_cells("A3:AC3")
+    ws1["A3"] = f"★ Đã đối chiếu & hợp nhất thành công: {len(records):,} vụ án - Tách riêng Lãnh đạo Viện, Lãnh đạo Phòng & Kiểm sát viên ★"
+    ws1["A3"].font = Font(name="Segoe UI", size=10, bold=True, color="047857")
+    ws1["A3"].fill = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
+    ws1["A3"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[3].height = 24
+    
+    # Row 4: Group Header Banners (7 Nhóm màu)
+    GROUP_BANNERS = [
+        ("A4:E4", "1. THÔNG TIN VỤ ÁN & NGUỒN ĐỐI CHIẾU", "0F2942", "F8FAFC"),
+        ("F4:H4", "2. QUYẾT ĐỊNH KHỞI TỐ", "1E3A8A", "DBEAFE"),
+        ("I4:L4", "3. THỤ LÝ KIỂM SÁT", "0E7490", "CFFAFE"),
+        ("M4:R4", "4. TIẾN ĐỘ, QUÁ HẠN & THỜI HIỆU TNHS (ĐẶC BIỆT CHÚ Ý)", "991B1B", "FEE2E2"),
+        ("S4:V4", "5. BỊ CAN & TỘI DANH", "166534", "DCFCE7"),
+        ("W4:Z4", "6. PHÂN CÔNG LÃNH ĐẠO & CÁN BỘ NGHIỆP VỤ", "581C87", "F3E8FF"),
+        ("AA4:AC4", "7. TIẾN ĐỘ & TRẠNG THÁI TỐ TỤNG", "334155", "F1F5F9"),
+    ]
+    ws1.row_dimensions[4].height = 24
+    for range_str, g_title, bg_color, text_color in GROUP_BANNERS:
+        ws1.merge_cells(range_str)
+        top_cell = ws1[range_str.split(":")[0]]
+        top_cell.value = g_title
+        top_cell.font = Font(name="Segoe UI", size=10, bold=True, color=text_color)
+        top_cell.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+        top_cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+    # Row 5: Column Headers
+    ws1.row_dimensions[5].height = 28
+    for col_idx, (col_key, col_title, width, align, bg_c) in enumerate(COLUMNS_29, 1):
+        cell = ws1.cell(row=5, column=col_idx)
+        cell.value = col_title
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color=bg_c, end_color=bg_c, fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+        col_letter = get_column_letter(col_idx)
+        ws1.column_dimensions[col_letter].width = width
+
+    # Write Data Rows
+    fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    fill_zebra = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    
+    fill_red = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    font_red = Font(name="Segoe UI", size=9, bold=True, color="991B1B")
+    
+    fill_amber = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    font_amber = Font(name="Segoe UI", size=9, bold=True, color="92400E")
+    
+    fill_yellow = PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid")
+    font_yellow = Font(name="Segoe UI", size=9, bold=True, color="854D0E")
+
+    fill_purple_ld = PatternFill(start_color="FAF5FF", end_color="FAF5FF", fill_type="solid")
+    font_ld_v = Font(name="Segoe UI", size=9, bold=True, color="581C87")
+    font_ld_p = Font(name="Segoe UI", size=9, bold=True, color="6B21A8")
+
+    DATE_FIELDS = {"ngay_qd_khoi_to", "ngay_thu_ly", "ngay_tiep_nhan", "thoi_han_giai_quyet", "ngay_het_thoi_hieu"}
+
+    for r_idx, rec in enumerate(records, 6):
+        ws1.row_dimensions[r_idx].height = 23
+        row_fill = fill_zebra if r_idx % 2 == 0 else fill_white
+
+        # Tách và chuẩn hóa sạch tên cán bộ/lãnh đạo (loại bỏ mọi tiền tố chức danh PVT, TP, KSV...)
+        if not rec.get("lanh_dao_vien") and not rec.get("lanh_dao_phong"):
+            ld_v, ld_p, ksv, cb_tl = split_officers(rec.get("can_bo_giai_quyet", ""), rec.get("can_bo_thu_ly", ""))
+            rec["lanh_dao_vien"] = ld_v
+            rec["lanh_dao_phong"] = ld_p
+            rec["can_bo_giai_quyet"] = ksv
+            rec["can_bo_thu_ly"] = cb_tl
+        else:
+            if rec.get("lanh_dao_vien"):
+                rec["lanh_dao_vien"] = "; ".join(filter(None, [clean_person_name(x) for x in str(rec["lanh_dao_vien"]).split(";")]))
+            if rec.get("lanh_dao_phong"):
+                rec["lanh_dao_phong"] = "; ".join(filter(None, [clean_person_name(x) for x in str(rec["lanh_dao_phong"]).split(";")]))
+            if rec.get("can_bo_giai_quyet"):
+                rec["can_bo_giai_quyet"] = "; ".join(filter(None, [clean_person_name(x) for x in str(rec["can_bo_giai_quyet"]).split(";")]))
+            if rec.get("can_bo_thu_ly"):
+                rec["can_bo_thu_ly"] = "; ".join(filter(None, [clean_person_name(x) for x in str(rec["can_bo_thu_ly"]).split(";")]))
+            
+        for c_idx, (col_key, _, _, align, _) in enumerate(COLUMNS_29, 1):
+            cell = ws1.cell(row=r_idx, column=c_idx)
+            val = rec.get(col_key, "")
+            
+            if col_key == "stt":
+                cell.value = r_idx - 5
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif col_key in DATE_FIELDS:
+                dt_obj = parse_date_safely(val)
+                if dt_obj:
+                    cell.value = dt_obj
+                    cell.number_format = "DD/MM/YYYY"
+                else:
+                    cell.value = str(val or "")
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            elif col_key == "so_ngay_con_lai":
+                if val is not None and str(val).strip() != "":
+                    try:
+                        cell.value = int(val)
+                    except ValueError:
+                        cell.value = str(val)
+                else:
+                    cell.value = ""
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.value = str(val or "")
+                cell.alignment = Alignment(horizontal=align, vertical="center")
+                
+            cell.border = thin_border
+            cell.fill = row_fill
+            cell.font = Font(name="Segoe UI", size=9)
+
+            # Cột Lãnh đạo Viện & Lãnh đạo Phòng: Nổi bật trang trọng
+            if col_key == "lanh_dao_vien" and val:
+                cell.fill = fill_purple_ld
+                cell.font = font_ld_v
+            elif col_key == "lanh_dao_phong" and val:
+                cell.fill = fill_purple_ld
+                cell.font = font_ld_p
+
+            # Cột Cảnh báo khẩn cấp: Tô màu đỏ/vàng
+            if col_key == "muc_do_khan_cap" and val:
+                val_str = str(val)
+                if "🔴" in val_str or "quá hạn" in val_str.lower():
+                    cell.fill = fill_red
+                    cell.font = font_red
+                elif "🟠" in val_str:
+                    cell.fill = fill_amber
+                    cell.font = font_amber
+                elif "🟡" in val_str:
+                    cell.fill = fill_yellow
+                    cell.font = font_yellow
+                    
+    ws1.auto_filter.ref = f"A5:AC{len(records) + 5}"
+    ws1.freeze_panes = "D6"
+
+    # ==========================================
+    # SHEET 2: BÁO CÁO PHÂN CÔNG & ĐỐI CHIẾU
+    # ==========================================
+    ws2 = wb_out.create_sheet(title="Bao_Cao_Ra_Soat_Doi_Chieu")
+    ws2.views.sheetView[0].showGridLines = True
+    
+    ws2.merge_cells("A1:G1")
+    ws2["A1"] = "BÁO CÁO TỔNG KẾT RÀ SOÁT, ĐỐI CHIẾU & PHÂN CÔNG LÃNH ĐẠO"
+    ws2["A1"].font = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
+    ws2["A1"].fill = PatternFill(start_color="0B2545", end_color="0B2545", fill_type="solid")
+    ws2["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 32
+
+    # Trích xuất danh sách nguồn
+    multi_source_count = sum(1 for r in records if "Khớp nối" in str(r.get("nguon_du_lieu", "")))
+    all_source_names = set()
+    for r in records:
+        src = str(r.get("nguon_du_lieu", ""))
+        if "Khớp nối" in src and ":" in src:
+            parts = src.split(":", 1)[1].split("+")
+            for p in parts:
+                all_source_names.add(p.strip())
+        elif src:
+            all_source_names.add(src.strip())
+    n_source_files = max(1, len(all_source_names))
+
+    # Bảng 1: Chỉ số tổng thể
+    metrics = [
+        ("Tổng số vụ án sau khi rà soát & hợp nhất", len(records), "Tổng hợp trọn vẹn từ tất cả các file kết xuất QLAHS"),
+        ("Tổng số tập tin nguồn QLAHS đã nạp & đối chiếu", n_source_files, f"Bao gồm: {', '.join(sorted(all_source_names))[:80]}..."),
+        ("Số vụ án được khớp nối & bù đắp từ nhiều file", multi_source_count, "Được tự động đắp bù số thụ lý, KSV, hạn điều tra, thời hiệu TNHS"),
+        ("Số vụ án có cảnh báo quá hạn thời hạn điều tra", sum(1 for r in records if "quá hạn" in str(r.get("canh_bao_thoi_hieu", "")).lower()), "Cần lãnh đạo VKS và KSV chỉ đạo điều tra giải quyết gấp"),
+        ("Số vụ án đã phân công Lãnh đạo Viện phụ trách", sum(1 for r in records if r.get("lanh_dao_vien")), "Ghi nhận đích danh Lãnh đạo Viện phụ trách chỉ đạo"),
+        ("Số vụ án đã phân công Lãnh đạo Phòng phụ trách", sum(1 for r in records if r.get("lanh_dao_phong")), "Ghi nhận đích danh Lãnh đạo Phòng 2 phụ trách"),
+        ("Số vụ án đã phân công Kiểm sát viên giải quyết", sum(1 for r in records if r.get("can_bo_giai_quyet")), "Có tên KSV thực hành quyền công tố & kiểm sát điều tra"),
+        ("Số vụ án có thông tin tội danh & điều luật đầy đủ", sum(1 for r in records if r.get("dieu_luat")), "Trích xuất chi tiết từng điều khoản BLHS"),
+    ]
+    
+    headers_s2 = ["STT", "Chỉ số rà soát & đối chiếu", "Số lượng", "Đơn vị tính", "Đánh giá & Khuyến nghị nghiệp vụ"]
+    ws2.row_dimensions[3].height = 24
+    for c_idx, h in enumerate(headers_s2, 1):
+        cell = ws2.cell(row=3, column=c_idx, value=h)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="0F2942", end_color="0F2942", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+        
+    for m_idx, (m_title, m_val, m_note) in enumerate(metrics, 4):
+        ws2.row_dimensions[m_idx].height = 22
+        ws2.cell(row=m_idx, column=1, value=m_idx - 3).alignment = Alignment(horizontal="center", vertical="center")
+        ws2.cell(row=m_idx, column=2, value=m_title).alignment = Alignment(horizontal="left", vertical="center")
+        c3 = ws2.cell(row=m_idx, column=3, value=m_val)
+        c3.alignment = Alignment(horizontal="center", vertical="center")
+        c3.font = Font(name="Segoe UI", size=10, bold=True, color="1E3A8A")
+        ws2.cell(row=m_idx, column=4, value="Vụ án").alignment = Alignment(horizontal="center", vertical="center")
+        ws2.cell(row=m_idx, column=5, value=m_note).alignment = Alignment(horizontal="left", vertical="center")
+        for c in range(1, 6):
+            ws2.cell(row=m_idx, column=c).border = thin_border
+
+    # Bảng 2: Thống kê chi tiết phân công theo Lãnh đạo Viện & Lãnh đạo Phòng
+    start_r2 = len(metrics) + 6
+    ws2.merge_cells(f"A{start_r2}:F{start_r2}")
+    t2_cell = ws2[f"A{start_r2}"]
+    t2_cell.value = "THỐNG KÊ CHI TIẾT SỐ LƯỢNG VỤ ÁN THEO LÃNH ĐẠO VIỆN & LÃNH ĐẠO PHÒNG 2"
+    t2_cell.font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    t2_cell.fill = PatternFill(start_color="581C87", end_color="581C87", fill_type="solid")
+    t2_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[start_r2].height = 26
+
+    # Đếm số vụ án của từng lãnh đạo (Chuẩn hóa hợp nhất không trùng lặp dòng)
+    leader_stats = []
+    
+    # 1. Lãnh đạo Viện (Hợp nhất toàn bộ các biến thể về tên chính thức, không hiển thị tiền tố PVT)
+    for name in LANH_DAO_VIEN:
+        cnt = sum(1 for r in records if name.lower() in str(r.get("lanh_dao_vien", "")).lower())
+        pct = (cnt / len(records) * 100) if records else 0
+        leader_stats.append(("Lãnh đạo Viện", name, "Phó Viện trưởng VKSND TP.HCM", cnt, pct))
+
+    # Phó Viện trưởng khác nếu có (Trần Văn Cường, Bảo, Tùng...) - chỉ lấy họ tên sạch
+    other_pvts = set()
+    for r in records:
+        for p in str(r.get("lanh_dao_vien", "")).split(";"):
+            p_clean = clean_person_name(p.strip())
+            if p_clean and p_clean not in LANH_DAO_VIEN:
+                other_pvts.add(p_clean)
+    for p in sorted(other_pvts):
+        cnt = sum(1 for r in records if p.lower() in str(r.get("lanh_dao_vien", "")).lower())
+        pct = (cnt / len(records) * 100) if records else 0
+        leader_stats.append(("Lãnh đạo Viện", p, "Phó Viện trưởng phụ trách", cnt, pct))
+
+    # 2. Lãnh đạo Phòng 2 (Họ và tên chuẩn không kèm tiền tố TP/PTP)
+    for idx_p, name in enumerate(LANH_DAO_PHONG_2):
+        role = "Trưởng phòng 2" if idx_p == 0 else "Phó Trưởng phòng 2"
+        cnt = sum(1 for r in records if name.lower() in str(r.get("lanh_dao_phong", "")).lower())
+        pct = (cnt / len(records) * 100) if records else 0
+        leader_stats.append(("Lãnh đạo Phòng 2", name, role, cnt, pct))
+
+    # Lãnh đạo Phòng khác nếu có
+    other_ptps = set()
+    for r in records:
+        for p in str(r.get("lanh_dao_phong", "")).split(";"):
+            p_clean = clean_person_name(p.strip())
+            if p_clean and p_clean not in LANH_DAO_PHONG_2:
+                other_ptps.add(p_clean)
+    for p in sorted(other_ptps):
+        cnt = sum(1 for r in records if p.lower() in str(r.get("lanh_dao_phong", "")).lower())
+        pct = (cnt / len(records) * 100) if records else 0
+        leader_stats.append(("Lãnh đạo Phòng 2", p, "Phó Trưởng phòng phụ trách", cnt, pct))
+
+    headers_ld = ["STT", "Cấp Lãnh đạo", "Họ và tên Lãnh đạo", "Chức vụ / Phụ trách", "Số lượng vụ án", "Tỷ lệ %"]
+    ws2.row_dimensions[start_r2 + 1].height = 24
+    for c_idx, h in enumerate(headers_ld, 1):
+        cell = ws2.cell(row=start_r2 + 1, column=c_idx, value=h)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="3B0764", end_color="3B0764", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    for l_idx, (level, name, role, cnt, pct) in enumerate(leader_stats, start_r2 + 2):
+        ws2.row_dimensions[l_idx].height = 22
+        ws2.cell(row=l_idx, column=1, value=l_idx - start_r2 - 1).alignment = Alignment(horizontal="center", vertical="center")
+        
+        c_lev = ws2.cell(row=l_idx, column=2, value=level)
+        c_lev.alignment = Alignment(horizontal="center", vertical="center")
+        if "Viện" in level:
+            c_lev.font = Font(name="Segoe UI", size=9, bold=True, color="581C87")
+        else:
+            c_lev.font = Font(name="Segoe UI", size=9, bold=True, color="0E7490")
+            
+        c_name = ws2.cell(row=l_idx, column=3, value=name)
+        c_name.alignment = Alignment(horizontal="left", vertical="center")
+        c_name.font = Font(name="Segoe UI", size=9, bold=True)
+        
+        ws2.cell(row=l_idx, column=4, value=role).alignment = Alignment(horizontal="left", vertical="center")
+        
+        c_cnt = ws2.cell(row=l_idx, column=5, value=cnt)
+        c_cnt.alignment = Alignment(horizontal="center", vertical="center")
+        c_cnt.font = Font(name="Segoe UI", size=10, bold=True, color="991B1B" if cnt > 0 else "64748B")
+        
+        c_pct = ws2.cell(row=l_idx, column=6, value=f"{pct:.1f}%")
+        c_pct.alignment = Alignment(horizontal="center", vertical="center")
+        
+        for c in range(1, 7):
+            ws2.cell(row=l_idx, column=c).border = thin_border
+
+    ws2.column_dimensions["A"].width = 8
+    ws2.column_dimensions["B"].width = 22
+    ws2.column_dimensions["C"].width = 26
+    ws2.column_dimensions["D"].width = 30
+    ws2.column_dimensions["E"].width = 18
+    ws2.column_dimensions["F"].width = 14
+
+    # ==========================================
+    # SHEET 3: PIVOT TABLE TỔNG HỢP VKS x LOẠI TỘI
+    # ==========================================
+    ws3 = wb_out.create_sheet(title="Tong_Hop_Pivot_Table")
+    ws3.views.sheetView[0].showGridLines = True
+    
+    ws3.merge_cells("A1:G1")
+    ws3["A1"] = "BẢNG TỔNG HỢP PIVOT TABLE THEO ĐƠN VỊ VKS VÀ PHÂN LOẠI TỘI PHẠM"
+    ws3["A1"].font = Font(name="Segoe UI", size=12, bold=True, color="FFFFFF")
+    ws3["A1"].fill = PatternFill(start_color="0B2545", end_color="0B2545", fill_type="solid")
+    ws3["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws3.row_dimensions[1].height = 32
+
+    # Tổng hợp ma trận
+    unit_stats = {}
+    for r in records:
+        u = r.get("vks_thu_ly") or "Chưa rõ VKS"
+        lt = (r.get("loai_toi") or "").lower()
+        if u not in unit_stats:
+            unit_stats[u] = {"total": 0, "it": 0, "nt": 0, "rnt": 0, "dbnt": 0}
+        unit_stats[u]["total"] += 1
+        if "ít" in lt:
+            unit_stats[u]["it"] += 1
+        elif "rất" in lt:
+            unit_stats[u]["rnt"] += 1
+        elif "đặc biệt" in lt:
+            unit_stats[u]["dbnt"] += 1
+        elif "nghiêm trọng" in lt:
+            unit_stats[u]["nt"] += 1
+
+    headers_s3 = ["STT", "Đơn vị VKS thụ lý", "Tổng số vụ", "Ít nghiêm trọng", "Nghiêm trọng", "Rất nghiêm trọng", "Đặc biệt nghiêm trọng"]
+    ws3.row_dimensions[3].height = 24
+    for c_idx, h in enumerate(headers_s3, 1):
+        cell = ws3.cell(row=3, column=c_idx, value=h)
+        cell.font = Font(name="Segoe UI", size=9, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="0F2942", end_color="0F2942", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    sorted_units = sorted(unit_stats.keys(), key=lambda x: unit_stats[x]["total"], reverse=True)
+    tot_all = len(records)
+    tot_it = sum(v["it"] for v in unit_stats.values())
+    tot_nt = sum(v["nt"] for v in unit_stats.values())
+    tot_rnt = sum(v["rnt"] for v in unit_stats.values())
+    tot_dbnt = sum(v["dbnt"] for v in unit_stats.values())
+
+    for u_idx, u_name in enumerate(sorted_units, 4):
+        ws3.row_dimensions[u_idx].height = 22
+        st = unit_stats[u_name]
+        ws3.cell(row=u_idx, column=1, value=u_idx - 3).alignment = Alignment(horizontal="center", vertical="center")
+        ws3.cell(row=u_idx, column=2, value=u_name).alignment = Alignment(horizontal="left", vertical="center")
+        ws3.cell(row=u_idx, column=3, value=st["total"]).alignment = Alignment(horizontal="center", vertical="center")
+        ws3.cell(row=u_idx, column=4, value=st["it"]).alignment = Alignment(horizontal="center", vertical="center")
+        ws3.cell(row=u_idx, column=5, value=st["nt"]).alignment = Alignment(horizontal="center", vertical="center")
+        ws3.cell(row=u_idx, column=6, value=st["rnt"]).alignment = Alignment(horizontal="center", vertical="center")
+        ws3.cell(row=u_idx, column=7, value=st["dbnt"]).alignment = Alignment(horizontal="center", vertical="center")
+        for c in range(1, 8):
+            ws3.cell(row=u_idx, column=c).border = thin_border
+
+    # Row Tổng cộng
+    tot_row = len(sorted_units) + 4
+    ws3.row_dimensions[tot_row].height = 24
+    ws3.cell(row=tot_row, column=1, value="∑").alignment = Alignment(horizontal="center", vertical="center")
+    ws3.cell(row=tot_row, column=2, value="TỔNG CỘNG CHUNG").alignment = Alignment(horizontal="center", vertical="center")
+    ws3.cell(row=tot_row, column=3, value=tot_all).alignment = Alignment(horizontal="center", vertical="center")
+    ws3.cell(row=tot_row, column=4, value=tot_it).alignment = Alignment(horizontal="center", vertical="center")
+    ws3.cell(row=tot_row, column=5, value=tot_nt).alignment = Alignment(horizontal="center", vertical="center")
+    ws3.cell(row=tot_row, column=6, value=tot_rnt).alignment = Alignment(horizontal="center", vertical="center")
+    ws3.cell(row=tot_row, column=7, value=tot_dbnt).alignment = Alignment(horizontal="center", vertical="center")
+    
+    for c in range(1, 8):
+        cell = ws3.cell(row=tot_row, column=c)
+        cell.font = Font(name="Segoe UI", size=10, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        cell.border = double_bottom_border
+
+    ws3.column_dimensions["A"].width = 8
+    ws3.column_dimensions["B"].width = 52
+    ws3.column_dimensions["C"].width = 16
+    ws3.column_dimensions["D"].width = 18
+    ws3.column_dimensions["E"].width = 18
+    ws3.column_dimensions["F"].width = 20
+    ws3.column_dimensions["G"].width = 24
+
+    wb_out.save(out_filepath)
+
+
+
+def build_pivot_summary(records):
+    """Tính toán ma trận Pivot Table: Tỉnh/Thành × Giai đoạn và Trạng thái hồ sơ."""
+    if not records:
+        return {}, [], []
+
+    stages_order = ["Điều tra", "Truy tố", "Sơ thẩm", "Phúc thẩm", "Thi hành án"]
+    found_stages = []
+    for r in records:
+        gd = r.get("giai_doan", "").strip() or "Chưa rõ"
+        if gd not in found_stages:
+            found_stages.append(gd)
+
+    stages = [s for s in stages_order if s in found_stages]
+    for s in found_stages:
+        if s not in stages:
+            stages.append(s)
+
+    matrix = {}
+    for r in records:
+        prov = r.get("tinh_thanh", "").strip() or "Khác / Chưa rõ"
+        gd = r.get("giai_doan", "").strip() or "Chưa rõ"
+        tt = r.get("trang_thai", "").strip() or "Khác"
+        va = r.get("ma_vu_an", "").strip()
+
+        if prov not in matrix:
+            matrix[prov] = {
+                "total_defendants": 0,
+                "cases": set(),
+                "stages": {s: 0 for s in stages},
+                "status": {},
+            }
+        matrix[prov]["total_defendants"] += 1
+        if va:
+            matrix[prov]["cases"].add(va)
+        if gd not in matrix[prov]["stages"]:
+            matrix[prov]["stages"][gd] = 0
+        matrix[prov]["stages"][gd] += 1
+        matrix[prov]["status"][tt] = matrix[prov]["status"].get(tt, 0) + 1
+
+    sorted_provinces = sorted(matrix.keys(), key=lambda p: matrix[p]["total_defendants"], reverse=True)
+    return matrix, stages, sorted_provinces
+
+
+def export_records_to_excel(records, out_filepath):
+    """Xuất file Excel gồm 2 Sheet: Sheet 1 Danh sách 12 cột, Sheet 2 Bảng Pivot Table Tổng hợp."""
+    wb = openpyxl.Workbook()
+
+    # Sheet 1: Danh sách chuẩn hóa 12 cột
+    ws1 = wb.active
+    ws1.title = "Danh_Sach_Chuan_Hoa"
+    ws1.views.sheetView[0].showGridLines = True
+
+    NAVY_VKS = "0A2540"     # Xanh Kiểm sát đậm
+    CRIMSON_VKS = "991B1B"  # Đỏ Tư pháp
+    GOLD_VKS = "D97706"     # Vàng Phù hiệu
+
+    thin_border = Border(
+        left=Side(style="thin", color="D1D5DB"),
+        right=Side(style="thin", color="D1D5DB"),
+        top=Side(style="thin", color="D1D5DB"),
+        bottom=Side(style="thin", color="D1D5DB"),
+    )
+
+    headers12 = [col_title for _, col_title, _ in COLUMNS_12]
+    ws1.row_dimensions[1].height = 28
+    for c_idx, h_title in enumerate(headers12, start=1):
+        cell = ws1.cell(row=1, column=c_idx, value=h_title)
+        cell.font = Font(name="Times New Roman", size=11, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color=NAVY_VKS, end_color=NAVY_VKS, fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+
+    for idx, rec in enumerate(records, start=1):
+        r = idx + 1
+        ws1.row_dimensions[r].height = 26
+        vals = [
+            int(rec["stt"]) if str(rec["stt"]).isdigit() else idx,
+            rec["ma_vu_an"],
+            rec["ten_vu_an"],
+            rec["cqdt"],
+            rec["tinh_thanh"],
+            rec["giai_doan"],
+            rec["ma_bi_can"],
+            rec["ten_bi_can"],
+            rec["ngay_sinh"],
+            rec["so_cccd"],
+            rec["dieu_luat"],
+            rec["trang_thai"],
+        ]
+        for c_idx, val in enumerate(vals, start=1):
+            c = ws1.cell(row=r, column=c_idx, value=val)
+            c.font = Font(name="Times New Roman", size=11, bold=(c_idx in (2, 5, 8)))
+            c.border = thin_border
+            if c_idx == 1:
+                c.alignment = Alignment(horizontal="right", vertical="center")
+            elif c_idx in (2, 7, 9, 10):
+                c.number_format = "@"
+                c.alignment = Alignment(horizontal="left", vertical="center")
+            elif c_idx in (5, 6, 12):
+                c.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                c.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+    ws1.freeze_panes = "A2"
+    widths12 = [8, 24, 34, 28, 20, 14, 26, 22, 14, 16, 36, 18]
+    for c_idx, w in enumerate(widths12, start=1):
+        ws1.column_dimensions[get_column_letter(c_idx)].width = w
+
+    # Sheet 2: Bảng Pivot Table Tổng hợp theo Tỉnh/Thành & Giai đoạn
+    ws2 = wb.create_sheet(title="Tong_Hop_Pivot_Table")
+    ws2.views.sheetView[0].showGridLines = True
+
+    matrix, stages, sorted_provinces = build_pivot_summary(records)
+
+    ws2.merge_cells("A1:G1")
+    t_cell = ws2.cell(row=1, column=1, value="VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH")
+    t_cell.font = Font(name="Times New Roman", size=13, bold=True, color="FFFFFF")
+    t_cell.fill = PatternFill(start_color=NAVY_VKS, end_color=NAVY_VKS, fill_type="solid")
+    t_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 30
+
+    ws2.merge_cells("A2:G2")
+    sub_cell = ws2.cell(row=2, column=1, value="HỆ THỐNG TỔNG HỢP VÀ XỬ LÝ DỮ LIỆU NTQLAHS - BÁO CÁO PIVOT TABLE TỔNG HỢP")
+    sub_cell.font = Font(name="Times New Roman", size=11, bold=True, color="991B1B")
+    sub_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[2].height = 24
+
+    pivot_headers = ["STT", "Tỉnh / Thành phố", "Số vụ án", "Tổng số bị can"] + [f"GĐ: {s}" for s in stages] + ["Tỷ lệ %"]
+    ws2.row_dimensions[4].height = 26
+    for c_idx, h_text in enumerate(pivot_headers, start=1):
+        cell = ws2.cell(row=4, column=c_idx, value=h_text)
+        cell.font = Font(name="Times New Roman", size=11, bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color=CRIMSON_VKS, end_color=CRIMSON_VKS, fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    total_records = len(records)
+    current_row = 5
+    for p_idx, prov in enumerate(sorted_provinces, start=1):
+        data = matrix[prov]
+        ws2.row_dimensions[current_row].height = 24
+        pct = (data["total_defendants"] / total_records * 100) if total_records > 0 else 0
+        row_vals = [
+            p_idx,
+            prov,
+            len(data["cases"]),
+            data["total_defendants"],
+        ] + [data["stages"].get(s, 0) for s in stages] + [f"{pct:.1f}%"]
+
+        for c_idx, val in enumerate(row_vals, start=1):
+            cell = ws2.cell(row=current_row, column=c_idx, value=val)
+            cell.font = Font(name="Times New Roman", size=11, bold=(c_idx in (2, 4)))
+            cell.border = thin_border
+            if c_idx in (1, 3, 4) or c_idx > 4:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+        current_row += 1
+
+    # Dòng Tổng cộng chung
+    ws2.row_dimensions[current_row].height = 26
+    ws2.cell(row=current_row, column=1, value="").border = thin_border
+    c_total_lbl = ws2.cell(row=current_row, column=2, value="TỔNG CỘNG CHUNG")
+    c_total_lbl.font = Font(name="Times New Roman", size=11, bold=True, color=NAVY_VKS)
+    c_total_lbl.border = thin_border
+    c_total_lbl.alignment = Alignment(horizontal="center", vertical="center")
+
+    all_cases = len(set(r.get("ma_vu_an", "").strip() for r in records if r.get("ma_vu_an", "").strip()))
+    c_cases = ws2.cell(row=current_row, column=3, value=all_cases)
+    c_cases.font = Font(name="Times New Roman", size=11, bold=True, color=NAVY_VKS)
+    c_cases.border = thin_border
+    c_cases.alignment = Alignment(horizontal="center", vertical="center")
+
+    c_defs = ws2.cell(row=current_row, column=4, value=total_records)
+    c_defs.font = Font(name="Times New Roman", size=11, bold=True, color=NAVY_VKS)
+    c_defs.border = thin_border
+    c_defs.alignment = Alignment(horizontal="center", vertical="center")
+
+    for s_idx, s in enumerate(stages, start=5):
+        s_total = sum(matrix[p]["stages"].get(s, 0) for p in sorted_provinces)
+        c_stg = ws2.cell(row=current_row, column=s_idx, value=s_total)
+        c_stg.font = Font(name="Times New Roman", size=11, bold=True, color=NAVY_VKS)
+        c_stg.border = thin_border
+        c_stg.alignment = Alignment(horizontal="center", vertical="center")
+
+    pct_col_idx = 5 + len(stages)
+    c_pct = ws2.cell(row=current_row, column=pct_col_idx, value="100.0%")
+    c_pct.font = Font(name="Times New Roman", size=11, bold=True, color=NAVY_VKS)
+    c_pct.border = thin_border
+    c_pct.alignment = Alignment(horizontal="center", vertical="center")
+
+    for c_idx in range(1, pct_col_idx + 1):
+        cell = ws2.cell(row=current_row, column=c_idx)
+        cell.fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+
+    ws2.column_dimensions["A"].width = 8
+    ws2.column_dimensions["B"].width = 24
+    ws2.column_dimensions["C"].width = 14
+    ws2.column_dimensions["D"].width = 16
+    for idx in range(len(stages)):
+        col_letter = get_column_letter(5 + idx)
+        ws2.column_dimensions[col_letter].width = 16
+    ws2.column_dimensions[get_column_letter(pct_col_idx)].width = 14
+
+    wb.save(out_filepath)
+
+
+class LoadingDialog(tk.Toplevel):
+    """Hộp thoại loading chuyên nghiệp hiển thị thanh tiến trình và thông báo thời gian thực."""
+
+    def __init__(self, parent, title="Đang xử lý dữ liệu", message="Hệ thống đang xử lý dữ liệu hồ sơ QLAHS..."):
+        super().__init__(parent)
+        self.title(title)
+        self.transient(parent)
+        self.resizable(False, False)
+        self.configure(bg="#0B2545")
+
+        # Cài đặt biểu tượng cửa sổ nếu có
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo_vks.ico")
+        if os.path.exists(icon_path):
+            try:
+                self.iconbitmap(icon_path)
+            except Exception:
+                pass
+
+        # Kích thước và định vị căn giữa màn hình cha
+        width, height = 480, 195
+        try:
+            parent.update_idletasks()
+            pw = parent.winfo_width()
+            ph = parent.winfo_height()
+            px = parent.winfo_rootx()
+            py = parent.winfo_rooty()
+            x = px + max(0, (pw - width) // 2)
+            y = py + max(0, (ph - height) // 2)
+            self.geometry(f"{width}x{height}+{x}+{y}")
+        except Exception:
+            self.geometry(f"{width}x{height}")
+
+        # Khung viền mạ vàng VKS
+        border_frame = tk.Frame(self, bg="#C29B38", bd=2)
+        border_frame.pack(fill="both", expand=True)
+
+        inner_frame = tk.Frame(border_frame, bg="#FFFFFF")
+        inner_frame.pack(fill="both", expand=True, padx=2, pady=2)
+
+        # Thanh tiêu đề phụ bên trong
+        banner = tk.Frame(inner_frame, bg="#07172C", padx=12, pady=7)
+        banner.pack(fill="x")
+
+        tk.Label(
+            banner,
+            text="🏛️  VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH",
+            font=("Segoe UI", 9, "bold"),
+            fg="#F59E0B",
+            bg="#07172C",
+        ).pack(side="left")
+
+        # Nội dung chính
+        content = tk.Frame(inner_frame, bg="#FFFFFF", padx=20, pady=12)
+        content.pack(fill="both", expand=True)
+
+        self.lbl_msg = tk.Label(
+            content,
+            text=message,
+            font=("Segoe UI", 10, "bold"),
+            fg="#0B2545",
+            bg="#FFFFFF",
+            wraplength=430,
+            justify="center",
+        )
+        self.lbl_msg.pack(pady=(4, 8))
+
+        # Thanh Progress bar chuyển động liên tục
+        self.pb = ttk.Progressbar(content, mode="indeterminate", length=410)
+        self.pb.pack(pady=4)
+        self.pb.start(10)
+
+        # Dòng trạng thái chi tiết kèm thời gian
+        self.start_time = time.time()
+        self.lbl_sub = tk.Label(
+            content,
+            text="⏳ Đang khởi tạo tiến trình... Vui lòng không đóng phần mềm.",
+            font=("Segoe UI", 8, "italic"),
+            fg="#64748B",
+            bg="#FFFFFF",
+        )
+        self.lbl_sub.pack(pady=(6, 0))
+
+        # Khóa tương tác với cửa sổ cha (Modal)
+        self.protocol("WM_DELETE_WINDOW", lambda: None)
+        try:
+            self.grab_set()
+        except Exception:
+            pass
+        self.focus_set()
+        try:
+            self.lift()
+            self.attributes("-topmost", True)
+        except Exception:
+            pass
+
+        self._ticker_active = True
+        self._tick()
+
+    def _tick(self):
+        if not self._ticker_active:
+            return
+        elapsed = int(time.time() - self.start_time)
+        mins, secs = divmod(elapsed, 60)
+        cur_text = self.lbl_sub.cget("text")
+        if "Đang chạy:" in cur_text:
+            base_txt = cur_text.split(" (Đang chạy:")[0]
+            self.lbl_sub.config(text=f"{base_txt} (Đang chạy: {mins:02d}:{secs:02d})")
+        self.after(1000, self._tick)
+
+    def update_message(self, text, subtext=None):
+        try:
+            self.lbl_msg.config(text=text)
+            if subtext:
+                elapsed = int(time.time() - self.start_time)
+                mins, secs = divmod(elapsed, 60)
+                self.lbl_sub.config(text=f"⚙️ {subtext} (Đang chạy: {mins:02d}:{secs:02d})")
+            self.update_idletasks()
+        except Exception:
+            pass
+
+    def close(self):
+        self._ticker_active = False
+        try:
+            self.pb.stop()
+            self.grab_release()
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+
+
+class QLAHSApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        # Cập nhật tiêu đề theo yêu cầu
+        self.title("VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH - Hệ thống Tổng hợp và Xử lý Dữ liệu NTQLAHS (Offline)")
+        self.geometry("1400x820")
+        self.minsize(1100, 680)
+        self.configure(bg="#F8FAFC")
+
+        # Cài đặt biểu tượng cửa sổ nếu có file logo_vks.ico
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo_vks.ico")
+        if os.path.exists(icon_path):
+            try:
+                self.iconbitmap(icon_path)
+            except Exception:
+                pass
+
+        self.data_format = "DEFENDANT"
+        self.records = []
+        self._search_job = None
+        self.kpi_titles = {}
+        self.kpi_cards = {}
+        self._setup_styles()
+        self._build_ui()
+
+    def run_async_task(self, title, loading_msg, worker_fn, on_success, on_error=None):
+        """Chạy tác vụ nặng ở luồng phụ (Thread) an toàn tuyệt đối qua Queue với Loading Bar."""
+        dlg = LoadingDialog(self, title=str(title), message=str(loading_msg))
+        dlg.update()
+        self.update()
+
+        task_queue = queue.Queue()
+
+        def _worker_thread():
+            try:
+                def progress_cb(msg, sub=None):
+                    task_queue.put(("progress", msg, sub))
+
+                result = worker_fn(progress_cb)
+                task_queue.put(("done", result))
+            except Exception as e:
+                task_queue.put(("error", e))
+
+        def _check_queue():
+            try:
+                while True:
+                    item = task_queue.get_nowait()
+                    msg_type = item[0]
+                    if msg_type == "progress":
+                        dlg.update_message(item[1], item[2])
+                    elif msg_type == "done":
+                        try:
+                            dlg.update_message("Đang nạp dữ liệu và cập nhật bảng hiển thị...", "Vui lòng chờ giây lát...")
+                            self.update_idletasks()
+                            on_success(item[1])
+                        except Exception as ex:
+                            messagebox.showerror("Lỗi hiển thị", f"Không thể cập nhật giao diện:\n{ex}")
+                        finally:
+                            dlg.close()
+                        return
+                    elif msg_type == "error":
+                        dlg.close()
+                        err = item[1]
+                        if on_error:
+                            on_error(err)
+                        else:
+                            messagebox.showerror("Thông báo lỗi", f"Quá trình xử lý dữ liệu gặp lỗi:\n{err}")
+                        return
+            except queue.Empty:
+                pass
+
+            self.after(40, _check_queue)
+
+        threading.Thread(target=_worker_thread, daemon=True).start()
+        self.after(40, _check_queue)
+
+    def _setup_styles(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        # Style Treeview Headings: Deep Navy với chữ trắng nổi bật
+        style.configure(
+            "Treeview.Heading",
+            background="#0A2540",
+            foreground="#FFFFFF",
+            font=("Segoe UI", 9, "bold"),
+            relief=tk.FLAT,
+            padding=[4, 6]
+        )
+        style.map(
+            "Treeview.Heading",
+            background=[("active", "#153E75"), ("pressed", "#991B1B")]
+        )
+
+        # Style Notebook Tabs: Phong cách VKS sinh động
+        style.configure("TNotebook", background="#F8FAFC", borderwidth=0)
+        style.configure(
+            "TNotebook.Tab",
+            font=("Segoe UI", 10, "bold"),
+            padding=[20, 8],
+            background="#E2E8F0",
+            foreground="#334155"
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", "#0A2540"), ("active", "#CBD5E1")],
+            foreground=[("selected", "#FBBF24"), ("active", "#0F172A")]
+        )
+
+        # Style Treeview Rows
+        style.configure("Treeview", font=("Segoe UI", 9), rowheight=26, borderwidth=1, relief=tk.SOLID)
+        style.map("Treeview", background=[("selected", "#DBEAFE")], foreground=[("selected", "#1E3A8A")])
+
+    def _build_fallback_logo(self, parent):
+        box = tk.Frame(parent, bg="#991B1B", width=48, height=48, relief=tk.RAISED, bd=2)
+        box.pack(side=tk.LEFT, padx=(0, 12))
+        box.pack_propagate(False)
+        tk.Label(box, text="⚖", font=("Segoe UI", 20, "bold"), fg="#FEF08A", bg="#991B1B").pack(expand=True)
+
+    def _build_ui(self):
+        # 1. Header chủ đề VKSND TP. HỒ CHÍ MINH sinh động
+        header = tk.Frame(self, bg="#07172C", height=76)
+        header.pack(fill=tk.X)
+
+        # Vạch màu vàng cờ / hoàng kim trên cùng
+        top_stripe = tk.Frame(header, bg="#F59E0B", height=4)
+        top_stripe.pack(fill=tk.X, side=tk.TOP)
+
+        header_content = tk.Frame(header, bg="#07172C")
+        header_content.pack(fill=tk.BOTH, expand=True, padx=16, pady=6)
+
+        # Logo / Hình ảnh Trụ sở VKSND TP. Hồ Chí Minh
+        logo_img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo_header_vksnd_tphcm.png")
+        if os.path.exists(logo_img_path):
+            try:
+                self.header_logo_img = tk.PhotoImage(file=logo_img_path)
+                logo_lbl = tk.Label(
+                    header_content,
+                    image=self.header_logo_img,
+                    bg="#07172C",
+                    relief=tk.SOLID,
+                    bd=1,
+                    highlightbackground="#F59E0B",
+                    highlightthickness=2
+                )
+                logo_lbl.pack(side=tk.LEFT, padx=(0, 12))
+            except Exception:
+                self._build_fallback_logo(header_content)
+        else:
+            self._build_fallback_logo(header_content)
+
+        # Khối tiêu đề
+        title_box = tk.Frame(header_content, bg="#07172C")
+        title_box.pack(side=tk.LEFT, fill=tk.Y)
+
+        tk.Label(
+            title_box,
+            text="VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH",
+            font=("Segoe UI", 11, "bold"),
+            fg="#FBBF24",
+            bg="#07172C",
+        ).pack(anchor=tk.W)
+
+        tk.Label(
+            title_box,
+            text="HỆ THỐNG TỔNG HỢP VÀ XỬ LÝ DỮ LIỆU NTQLAHS",
+            font=("Segoe UI", 14, "bold"),
+            fg="#FFFFFF",
+            bg="#07172C",
+        ).pack(anchor=tk.W)
+
+        # Khối huy hiệu & châm ngôn ngành bên phải
+        right_box = tk.Frame(header_content, bg="#07172C")
+        right_box.pack(side=tk.RIGHT, fill=tk.Y)
+
+        tk.Label(
+            right_box,
+            text="BẢO MẬT OFFLINE 100%",
+            font=("Segoe UI", 8, "bold"),
+            fg="#6EE7B7",
+            bg="#064E3B",
+            padx=8,
+            pady=2,
+            relief=tk.FLAT
+        ).pack(anchor=tk.E, pady=(0, 4))
+
+        tk.Label(
+            right_box,
+            text="★ CÔNG MINH - CHÍNH TRỰC - KHÁCH QUAN - THẬN TRỌNG - KHIÊM TỐN ★",
+            font=("Segoe UI", 9, "bold"),
+            fg="#FEF08A",
+            bg="#831843",
+            padx=10,
+            pady=3,
+            relief=tk.GROOVE,
+        ).pack(anchor=tk.E)
+
+        # 2. THANH THẺ KPI TỔNG HỢP MÀU SẮC SINH ĐỘNG (5 Khối trực quan)
+        kpi_bar = tk.Frame(self, bg="#F1F5F9", pady=6, padx=12)
+        kpi_bar.pack(fill=tk.X)
+
+        self.kpi_cards = {}
+        cards_config = [
+            ("total", "TỔNG SỐ BỊ CAN", "#FEE2E2", "#B91C1C", "#991B1B", "0 bị can"),
+            ("cases", "SỐ VỤ ÁN ĐỘC LẬP", "#DBEAFE", "#2563EB", "#1E40AF", "0 vụ án"),
+            ("provinces", "TỈNH / THÀNH THỤ LÝ", "#D1FAE5", "#059669", "#065F46", "0 địa bàn"),
+            ("stages", "GIAI ĐOẠN TỐ TỤNG", "#CCFBF1", "#0D9488", "#115E59", "Chưa có"),
+            ("status", "TRẠNG THÁI HỒ SƠ", "#FEF3C7", "#D97706", "#92400E", "Chưa có"),
+        ]
+
+        for key, title, bg_col, border_col, text_col, init_val in cards_config:
+            c_frame = tk.Frame(kpi_bar, bg=bg_col, relief=tk.SOLID, bd=1, highlightbackground=border_col, highlightthickness=1)
+            c_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4, ipady=3)
+
+            title_lbl = tk.Label(
+                c_frame,
+                text=title,
+                font=("Segoe UI", 8, "bold"),
+                fg=text_col,
+                bg=bg_col
+            )
+            title_lbl.pack(anchor=tk.W, padx=8, pady=(2, 0))
+            self.kpi_titles[key] = title_lbl
+
+            val_lbl = tk.Label(
+                c_frame,
+                text=init_val,
+                font=("Segoe UI", 12 if key in ("total", "cases", "provinces") else 9, "bold"),
+                fg=text_col,
+                bg=bg_col
+            )
+            val_lbl.pack(anchor=tk.W, padx=8, pady=(0, 2))
+            self.kpi_cards[key] = val_lbl
+
+        # 3. Toolbar các nút chức năng sinh động
+        toolbar = tk.Frame(self, bg="#FFFFFF", pady=8, padx=16, relief=tk.RIDGE, bd=1)
+        toolbar.pack(fill=tk.X, padx=12, pady=(4, 4))
+
+        btn_open = tk.Button(
+            toolbar,
+            text="📂 1. Chọn File Excel QLAHS (.xlsx)",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1D4ED8",
+            fg="white",
+            activebackground="#1E40AF",
+            activeforeground="white",
+            padx=14,
+            pady=6,
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=self.on_open_excel,
+        )
+        btn_open.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_paste = tk.Button(
+            toolbar,
+            text="📋 2. Dán Clipboard (Ctrl+V)",
+            font=("Segoe UI", 9, "bold"),
+            bg="#0D9488",
+            fg="white",
+            activebackground="#0F766E",
+            activeforeground="white",
+            padx=14,
+            pady=6,
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=self.on_paste_clipboard,
+        )
+        btn_paste.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_export = tk.Button(
+            toolbar,
+            text="📥 3. Xuất Excel Đầy Đủ & Pivot (.xlsx)",
+            font=("Segoe UI", 9, "bold"),
+            bg="#B91C1C",
+            fg="white",
+            activebackground="#991B1B",
+            activeforeground="white",
+            padx=16,
+            pady=6,
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=self.on_export_excel,
+        )
+        btn_export.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_reconcile = tk.Button(
+            toolbar,
+            text="⚡ 4. Đối chiếu & Hợp nhất Nhiều File QLAHS",
+            font=("Segoe UI", 9, "bold"),
+            bg="#7C3AED",
+            fg="white",
+            activebackground="#6D28D9",
+            activeforeground="white",
+            padx=14,
+            pady=6,
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=self.on_reconcile_multiple_files,
+        )
+        btn_reconcile.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_pivot_toggle = tk.Button(
+            toolbar,
+            text="📊 Xem Ma Trận Pivot",
+            font=("Segoe UI", 9, "bold"),
+            bg="#D97706",
+            fg="white",
+            activebackground="#B45309",
+            activeforeground="white",
+            padx=12,
+            pady=6,
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=lambda: self.notebook.select(1),
+        )
+        btn_pivot_toggle.pack(side=tk.LEFT, padx=(0, 8))
+
+        btn_clear = tk.Button(
+            toolbar,
+            text="Xóa danh sách",
+            font=("Segoe UI", 9),
+            bg="#F1F5F9",
+            fg="#475569",
+            activebackground="#E2E8F0",
+            padx=12,
+            pady=6,
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=self.on_clear,
+        )
+        btn_clear.pack(side=tk.RIGHT)
+
+        self.lbl_status = tk.Label(
+            toolbar,
+            text="Hệ thống sẵn sàng xử lý dữ liệu hồ sơ vụ án - bị can.",
+            font=("Segoe UI", 9, "italic"),
+            bg="#FFFFFF",
+            fg="#64748B",
+        )
+        self.lbl_status.pack(side=tk.LEFT, padx=8)
+
+        # 4. Notebook gồm 2 Tab chính: Tab Bảng 12 cột và Tab Pivot Table
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+
+        # Tab 1: Danh sách 12 cột chuẩn hóa
+        self.tab_table = tk.Frame(self.notebook, bg="#FFFFFF")
+        self.notebook.add(self.tab_table, text="📋 Danh Sách 12 Cột Chuẩn Hóa (Bao gồm Tỉnh/Thành)")
+        self._build_table_tab(self.tab_table)
+
+        # Tab 2: Bảng Pivot Table Tổng hợp
+        self.tab_pivot = tk.Frame(self.notebook, bg="#FFFFFF")
+        self.notebook.add(self.tab_pivot, text="📊 Bảng Pivot Table Ma Trận (Tỉnh/Thành × Giai Đoạn)")
+        self._build_pivot_tab(self.tab_pivot)
+
+    def _build_table_tab(self, parent):
+        # Thanh tìm kiếm & lọc nhanh màu sắc sinh động
+        filter_bar = tk.Frame(parent, bg="#F0FDF4", pady=6, padx=12, relief=tk.GROOVE, bd=1)
+        filter_bar.pack(fill=tk.X)
+
+        tk.Label(filter_bar, text="🔍 Tìm kiếm:", font=("Segoe UI", 9, "bold"), fg="#166534", bg="#F0FDF4").pack(side=tk.LEFT, padx=(0, 4))
+        self.search_var = tk.StringVar()
+        def _on_search_change(*args):
+            if self._search_job is not None:
+                self.after_cancel(self._search_job)
+            self._search_job = self.after(200, self.refresh_views)
+        self.search_var.trace_add("write", _on_search_change)
+        entry_search = tk.Entry(filter_bar, textvariable=self.search_var, width=24, font=("Segoe UI", 9))
+        entry_search.pack(side=tk.LEFT, padx=(0, 14))
+
+        tk.Label(filter_bar, text="🏛️ Tỉnh/Thành:", font=("Segoe UI", 9, "bold"), fg="#075985", bg="#F0FDF4").pack(side=tk.LEFT, padx=(0, 4))
+        self.prov_filter_var = tk.StringVar(value="Tất cả")
+        self.cbo_prov = ttk.Combobox(filter_bar, textvariable=self.prov_filter_var, state="readonly", width=16)
+        self.cbo_prov["values"] = ["Tất cả"]
+        self.cbo_prov.bind("<<ComboboxSelected>>", lambda e: self.refresh_views())
+        self.cbo_prov.pack(side=tk.LEFT, padx=(0, 14))
+
+        tk.Label(filter_bar, text="⚖️ Giai đoạn:", font=("Segoe UI", 9, "bold"), fg="#0f766e", bg="#F0FDF4").pack(side=tk.LEFT, padx=(0, 4))
+        self.stage_filter_var = tk.StringVar(value="Tất cả")
+        self.cbo_stage = ttk.Combobox(filter_bar, textvariable=self.stage_filter_var, state="readonly", width=13)
+        self.cbo_stage["values"] = ["Tất cả", "Điều tra", "Truy tố", "Sơ thẩm", "Phúc thẩm"]
+        self.cbo_stage.bind("<<ComboboxSelected>>", lambda e: self.refresh_views())
+        self.cbo_stage.pack(side=tk.LEFT, padx=(0, 14))
+
+        tk.Label(filter_bar, text="🏷️ Trạng thái:", font=("Segoe UI", 9, "bold"), fg="#9a3412", bg="#F0FDF4").pack(side=tk.LEFT, padx=(0, 4))
+        self.status_filter_var = tk.StringVar(value="Tất cả")
+        self.cbo_status = ttk.Combobox(filter_bar, textvariable=self.status_filter_var, state="readonly", width=13)
+        self.cbo_status["values"] = ["Tất cả", "Đình nã", "Truy nã", "Tạm đình chỉ"]
+        self.cbo_status.bind("<<ComboboxSelected>>", lambda e: self.refresh_views())
+        self.cbo_status.pack(side=tk.LEFT)
+
+        # Bảng Treeview 12 cột
+        table_frame = tk.Frame(parent, bg="#FFFFFF")
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        cols = [k for k, _, _ in COLUMNS_12]
+        self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", height=20)
+
+        # Cấu hình màu sắc hàng (Dòng chẵn / lẻ và màu trạng thái)
+        self.tree.tag_configure("even", background="#FFFFFF")
+        self.tree.tag_configure("odd", background="#F8FAFC")
+        self.tree.tag_configure("dinh_na", foreground="#B45309")
+        self.tree.tag_configure("truy_na", foreground="#DC2626")
+        self.tree.tag_configure("sap_het_thoi_hieu", foreground="#DC2626", font=("Segoe UI", 9, "bold"))
+        self.tree.tag_configure("tag_khan_cap", background="#FEE2E2", foreground="#991B1B", font=("Segoe UI", 9, "bold"))
+        self.tree.tag_configure("tag_rat_gap", background="#FEF3C7", foreground="#92400E", font=("Segoe UI", 9, "bold"))
+        self.tree.tag_configure("tag_sap_het", background="#FEF9C3", foreground="#854D0E")
+
+        for key, title, width in COLUMNS_12:
+            self.tree.heading(key, text=title)
+            anchor = tk.CENTER if key in ("stt", "tinh_thanh", "giai_doan", "ngay_sinh", "trang_thai") else tk.W
+            self.tree.column(key, width=width, anchor=anchor)
+
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
+
+    def _build_pivot_tab(self, parent):
+        # Khung thanh điều khiển Pivot
+        p_ctrl = tk.Frame(parent, bg="#EFF6FF", pady=8, padx=12, relief=tk.GROOVE, bd=1)
+        p_ctrl.pack(fill=tk.X)
+
+        tk.Label(
+            p_ctrl,
+            text="MA TRẬN PIVOT TABLE TỔNG HỢP:",
+            font=("Segoe UI", 10, "bold"),
+            fg="#1E40AF",
+            bg="#EFF6FF"
+        ).pack(side=tk.LEFT, padx=(0, 12))
+
+        self.lbl_pivot_desc = tk.Label(
+            p_ctrl,
+            text="Phân tích tổng hợp số lượng vụ án và bị can theo các chiều thông tin QLAHS.",
+            font=("Segoe UI", 9, "italic"),
+            fg="#475569",
+            bg="#EFF6FF"
+        )
+        self.lbl_pivot_desc.pack(side=tk.LEFT)
+
+        # Bảng Treeview ma trận Pivot
+        pivot_table_frame = tk.Frame(parent, bg="#FFFFFF")
+        pivot_table_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=6)
+
+        self.pivot_tree = ttk.Treeview(pivot_table_frame, show="headings", height=18)
+        self.pivot_tree.tag_configure("p_even", background="#FFFFFF")
+        self.pivot_tree.tag_configure("p_odd", background="#F0FDF4")
+        self.pivot_tree.tag_configure("p_total", background="#FEF3C7", font=("Segoe UI", 9, "bold"))
+
+        p_vsb = ttk.Scrollbar(pivot_table_frame, orient="vertical", command=self.pivot_tree.yview)
+        p_hsb = ttk.Scrollbar(pivot_table_frame, orient="horizontal", command=self.pivot_tree.xview)
+        self.pivot_tree.configure(yscrollcommand=p_vsb.set, xscrollcommand=p_hsb.set)
+
+        self.pivot_tree.grid(row=0, column=0, sticky="nsew")
+        p_vsb.grid(row=0, column=1, sticky="ns")
+        p_hsb.grid(row=1, column=0, sticky="ew")
+        pivot_table_frame.grid_rowconfigure(0, weight=1)
+        pivot_table_frame.grid_columnconfigure(0, weight=1)
+
+    def apply_columns_config(self):
+        is_reconcile = bool(self.records and any(r.get("nguon_du_lieu") for r in self.records))
+        is_case = (self.data_format in ("CASE", "CASE_REPORT") or is_reconcile)
+        if is_reconcile:
+            cols_def = COLUMNS_CASE_27
+        elif is_case:
+            cols_def = COLUMNS_CASE_24
+        else:
+            cols_def = COLUMNS_12
+
+        cols = [k for k, _, _ in cols_def]
+        self.tree["columns"] = cols
+        for key, title, width in cols_def:
+            self.tree.heading(key, text=title)
+            anchor = tk.CENTER if key in (
+                "stt", "nguon_du_lieu", "tinh_thanh", "giai_doan", "ngay_sinh", "so_cccd", "so_qd_khoi_to",
+                "ngay_qd_khoi_to", "ngay_tiep_nhan", "thoi_han_giai_quyet", "ngay_het_thoi_hieu",
+                "so_ngay_con_lai", "muc_do_khan_cap", "canh_bao_thoi_hieu", "so_thu_ly", "ngay_thu_ly",
+                "loai_thu_ly", "tong_bi_can", "loai_toi", "trang_thai_vu_an", "trang_thai"
+            ) else tk.W
+            self.tree.column(key, width=width, anchor=anchor)
+
+        if is_reconcile:
+            tab1_txt = "📋 Danh Sách 27 Cột Hợp Nhất & Đối Chiếu Đa Nguồn QLAHS"
+        elif is_case:
+            tab1_txt = "📋 Danh Sách 24 Cột Chuẩn Hóa (Sổ Vụ Án & Thụ Lý)"
+        else:
+            tab1_txt = "📋 Danh Sách 12 Cột Chuẩn Hóa (Bao gồm Tỉnh/Thành)"
+        self.notebook.tab(self.tab_table, text=tab1_txt)
+
+        tab2_txt = "📊 Bảng Pivot Table Ma Trận (VKS Thụ Lý × Phân Loại Tội)" if is_case else "📊 Bảng Pivot Table Ma Trận (Tỉnh/Thành × Giai Đoạn)"
+        self.notebook.tab(self.tab_pivot, text=tab2_txt)
+
+    def get_filtered_records(self):
+        q = self.search_var.get().strip().lower()
+        prov = self.prov_filter_var.get()
+        stg = self.stage_filter_var.get()
+        sts = self.status_filter_var.get()
+        urg = getattr(self, "urgency_filter_var", None)
+        urg_val = urg.get() if urg else "Tất cả"
+        is_case = (self.data_format == "CASE")
+
+        out = []
+        for r in self.records:
+            if prov != "Tất cả" and r.get("tinh_thanh", "") != prov:
+                continue
+            if stg != "Tất cả" and r.get("giai_doan", "").lower() != stg.lower():
+                continue
+            if sts != "Tất cả":
+                r_st = r.get("trang_thai_vu_an" if is_case else "trang_thai", "").lower()
+                if sts.lower() not in r_st:
+                    continue
+            if urg_val != "Tất cả":
+                r_urg = r.get("muc_do_khan_cap", "")
+                if urg_val[:3] not in r_urg:
+                    continue
+            if q:
+                line = " ".join(str(v) for v in r.values()).lower()
+                if q not in line:
+                    continue
+            out.append(r)
+        return out
+
+    def update_filter_options(self):
+        unique_provs = sorted(list(set(r.get("tinh_thanh", "").strip() for r in self.records if r.get("tinh_thanh", "").strip())))
+        cur = self.prov_filter_var.get()
+        self.cbo_prov["values"] = ["Tất cả"] + unique_provs
+        if cur not in self.cbo_prov["values"]:
+            self.prov_filter_var.set("Tất cả")
+
+        is_case = (self.data_format == "CASE")
+        if is_case:
+            statuses = sorted(list(set(r.get("trang_thai_vu_an", "").strip() for r in self.records if r.get("trang_thai_vu_an", "").strip())))
+            if statuses:
+                self.cbo_status["values"] = ["Tất cả"] + statuses
+        else:
+            self.cbo_status["values"] = ["Tất cả", "Đình nã", "Truy nã", "Tạm đình chỉ"]
+
+    def refresh_views(self):
+        self.apply_columns_config()
+        filtered = self.get_filtered_records()
+        self.update_filter_options()
+
+        is_reconcile = bool(self.records and any(r.get("nguon_du_lieu") for r in self.records))
+        is_case = (self.data_format in ("CASE", "CASE_REPORT") or is_reconcile)
+        if is_reconcile:
+            cols_def = COLUMNS_CASE_27
+        elif is_case:
+            cols_def = COLUMNS_CASE_24
+        else:
+            cols_def = COLUMNS_12
+
+        # 1. Cập nhật bảng dữ liệu với màu xen kẽ
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        for idx, r in enumerate(filtered):
+            vals = [r.get(k, "") for k, _, _ in cols_def]
+            row_tag = "even" if idx % 2 == 0 else "odd"
+            tags = [row_tag]
+            if is_case:
+                urg_str = r.get("muc_do_khan_cap", "")
+                if "🔴" in urg_str:
+                    tags.append("tag_khan_cap")
+                elif "🟠" in urg_str:
+                    tags.append("tag_rat_gap")
+                elif "🟡" in urg_str:
+                    tags.append("tag_sap_het")
+                elif r.get("canh_bao_thoi_hieu"):
+                    tags.append("sap_het_thoi_hieu")
+                if "tạm đình chỉ" in str(r.get("trang_thai_vu_an", "")).lower():
+                    tags.append("dinh_na")
+            else:
+                tt = str(r.get("trang_thai", "")).lower()
+                if "đình nã" in tt:
+                    tags.append("dinh_na")
+                elif "truy nã" in tt:
+                    tags.append("truy_na")
+
+            self.tree.insert("", tk.END, values=vals, tags=tuple(tags))
+
+        unit_label = "vụ án" if is_case else "hồ sơ bị can"
+        self.lbl_status.config(
+            text=f"Đã chuẩn hóa {len(self.records):,} {unit_label} (Đang hiển thị {len(filtered):,} bản ghi theo bộ lọc)."
+        )
+
+        # 2. Cập nhật thẻ KPI
+        if is_case:
+            total_cases = len(self.records)
+            near_expiry = sum(1 for r in self.records if r.get("canh_bao_thoi_hieu"))
+            unique_provs = len(set(r.get("tinh_thanh", "").strip() for r in self.records if r.get("tinh_thanh", "").strip()))
+            crime_counts = {}
+            for r in self.records:
+                c = r.get("loai_toi", "").strip() or "Khác"
+                crime_counts[c] = crime_counts.get(c, 0) + 1
+            status_counts = {}
+            for r in self.records:
+                s = r.get("trang_thai_vu_an", "").strip() or "Khác"
+                status_counts[s] = status_counts.get(s, 0) + 1
+
+            self.kpi_titles["total"].config(text="TỔNG SỐ VỤ ÁN")
+            self.kpi_cards["total"].config(text=f"{total_cases:,} vụ án")
+            self.kpi_titles["cases"].config(text="SẮP HẾT THỜI HIỆU TNHS")
+            self.kpi_cards["cases"].config(text=f"{near_expiry:,} vụ án")
+            self.kpi_titles["provinces"].config(text="ĐỊA BÀN / TỈNH THÀNH")
+            self.kpi_cards["provinces"].config(text=f"{unique_provs} địa bàn")
+            self.kpi_titles["stages"].config(text="PHÂN LOẠI TỘI PHẠM")
+            self.kpi_cards["stages"].config(text=" | ".join(f"{k}: {v}" for k, v in crime_counts.items()) or "Chưa có")
+            self.kpi_titles["status"].config(text="TRẠNG THÁI VỤ ÁN")
+            self.kpi_cards["status"].config(text=" | ".join(f"{k}: {v}" for k, v in status_counts.items()) or "Chưa có")
+        else:
+            total_defs = len(self.records)
+            unique_cases = len(set(r.get("ma_vu_an", "").strip() for r in self.records if r.get("ma_vu_an", "").strip()))
+            unique_provs = len(set(r.get("tinh_thanh", "").strip() for r in self.records if r.get("tinh_thanh", "").strip()))
+            stg_counts = {}
+            sts_counts = {}
+            for r in self.records:
+                g = r.get("giai_doan", "").strip() or "Chưa rõ"
+                stg_counts[g] = stg_counts.get(g, 0) + 1
+                t = r.get("trang_thai", "").strip() or "Khác"
+                sts_counts[t] = sts_counts.get(t, 0) + 1
+
+            self.kpi_titles["total"].config(text="TỔNG SỐ BỊ CAN")
+            self.kpi_cards["total"].config(text=f"{total_defs:,} bị can")
+            self.kpi_titles["cases"].config(text="SỐ VỤ ÁN ĐỘC LẬP")
+            self.kpi_cards["cases"].config(text=f"{unique_cases:,} vụ án")
+            self.kpi_titles["provinces"].config(text="TỈNH / THÀNH THỤ LÝ")
+            self.kpi_cards["provinces"].config(text=f"{unique_provs} địa bàn")
+            self.kpi_titles["stages"].config(text="GIAI ĐOẠN TỐ TỤNG")
+            self.kpi_cards["stages"].config(text=" | ".join(f"{k}: {v}" for k, v in stg_counts.items()) or "Chưa có")
+            self.kpi_titles["status"].config(text="TRẠNG THÁI HỒ SƠ")
+            self.kpi_cards["status"].config(text=" | ".join(f"{k}: {v}" for k, v in sts_counts.items()) or "Chưa có")
+
+        # 3. Cập nhật bảng Pivot Table
+        for item in self.pivot_tree.get_children():
+            self.pivot_tree.delete(item)
+
+        filter_defs = len(filtered)
+        if is_case:
+            matrix, crime_cols, sorted_units = build_pivot_case_summary(filtered)
+            cols = ["stt", "vks_thu_ly", "so_vu"] + [f"crime_{i}" for i in range(len(crime_cols))] + ["ty_le"]
+            self.pivot_tree["columns"] = cols
+            self.pivot_tree.heading("stt", text="STT")
+            self.pivot_tree.column("stt", width=50, anchor=tk.CENTER)
+            self.pivot_tree.heading("vks_thu_ly", text="Đơn vị VKS thụ lý")
+            self.pivot_tree.column("vks_thu_ly", width=250, anchor=tk.W)
+            self.pivot_tree.heading("so_vu", text="Tổng số vụ")
+            self.pivot_tree.column("so_vu", width=90, anchor=tk.CENTER)
+            for i, c in enumerate(crime_cols):
+                cid = f"crime_{i}"
+                self.pivot_tree.heading(cid, text=c)
+                self.pivot_tree.column(cid, width=120, anchor=tk.CENTER)
+            self.pivot_tree.heading("ty_le", text="Tỷ lệ %")
+            self.pivot_tree.column("ty_le", width=85, anchor=tk.CENTER)
+
+            for idx, u in enumerate(sorted_units, 1):
+                data = matrix[u]
+                pct = (data["total_cases"] / filter_defs * 100) if filter_defs > 0 else 0
+                row_vals = [idx, u, data["total_cases"]] + [data["crimes"].get(c, 0) for c in crime_cols] + [f"{pct:.1f}%"]
+                row_tag = "p_even" if idx % 2 == 0 else "p_odd"
+                self.pivot_tree.insert("", tk.END, values=row_vals, tags=(row_tag,))
+
+            if sorted_units:
+                tot_row = ["∑", "TỔNG CỘNG CHUNG", filter_defs] + [sum(matrix[u]["crimes"].get(c, 0) for u in sorted_units) for c in crime_cols] + ["100.0%"]
+                self.pivot_tree.insert("", tk.END, values=tot_row, tags=("p_total",))
+        else:
+            matrix, stages, sorted_provinces = build_pivot_summary(filtered)
+            pivot_cols = ["stt", "tinh_thanh", "so_vu", "tong_bi_can"] + [f"stg_{i}" for i in range(len(stages))] + ["ty_le"]
+            self.pivot_tree["columns"] = pivot_cols
+            self.pivot_tree.heading("stt", text="STT")
+            self.pivot_tree.column("stt", width=50, anchor=tk.CENTER)
+            self.pivot_tree.heading("tinh_thanh", text="Tỉnh / Thành phố")
+            self.pivot_tree.column("tinh_thanh", width=190, anchor=tk.W)
+            self.pivot_tree.heading("so_vu", text="Số vụ án")
+            self.pivot_tree.column("so_vu", width=85, anchor=tk.CENTER)
+            self.pivot_tree.heading("tong_bi_can", text="Tổng số bị can")
+            self.pivot_tree.column("tong_bi_can", width=110, anchor=tk.CENTER)
+
+            for i, s in enumerate(stages):
+                col_id = f"stg_{i}"
+                self.pivot_tree.heading(col_id, text=f"GĐ: {s}")
+                self.pivot_tree.column(col_id, width=105, anchor=tk.CENTER)
+
+            self.pivot_tree.heading("ty_le", text="Tỷ lệ %")
+            self.pivot_tree.column("ty_le", width=85, anchor=tk.CENTER)
+
+            for idx, prov in enumerate(sorted_provinces, start=1):
+                data = matrix[prov]
+                pct = (data["total_defendants"] / filter_defs * 100) if filter_defs > 0 else 0
+                row_vals = [
+                    idx,
+                    prov,
+                    len(data["cases"]),
+                    data["total_defendants"],
+                ] + [data["stages"].get(s, 0) for s in stages] + [f"{pct:.1f}%"]
+                row_tag = "p_even" if idx % 2 == 0 else "p_odd"
+                self.pivot_tree.insert("", tk.END, values=row_vals, tags=(row_tag,))
+
+            if sorted_provinces:
+                all_filtered_cases = len(set(r.get("ma_vu_an", "").strip() for r in filtered if r.get("ma_vu_an", "").strip()))
+                total_row = [
+                    "∑",
+                    "TỔNG CỘNG CHUNG",
+                    all_filtered_cases,
+                    filter_defs,
+                ] + [sum(matrix[p]["stages"].get(s, 0) for p in sorted_provinces) for s in stages] + ["100.0%"]
+                self.pivot_tree.insert("", tk.END, values=total_row, tags=("p_total",))
+
+    def on_open_excel(self):
+        if openpyxl is None:
+            messagebox.showerror("Thiếu thư viện", "Vui lòng cài đặt openpyxl: pip install openpyxl")
+            return
+        fpath = filedialog.askopenfilename(
+            title="Chọn file Excel copy từ QLAHS",
+            filetypes=[("Excel files", "*.xlsx *.xlsm"), ("All files", "*.*")],
+        )
+        if not fpath:
+            return
+
+        def _worker(update_cb):
+            return load_excel_and_parse(fpath, update_cb)
+
+        def _on_success(res):
+            fmt, records = res
+            self.data_format = fmt
+            self.records = records
+            self.refresh_views()
+            if fmt == "CASE":
+                msg = (
+                    f"Đã tự động nhận diện và chuẩn hóa {len(records):,} vụ án từ Sổ thụ lý QLAHS!\n\n"
+                    f"- Bóc tách 24 cột chuẩn hóa chi tiết.\n"
+                    f"- Tự động cảnh báo các vụ án sắp hết thời hiệu truy cứu TNHS.\n"
+                    f"- Bảng Pivot Table theo Đơn vị VKS và Phân loại tội phạm đã được cập nhật."
+                )
+            else:
+                msg = (
+                    f"Đã tự động nhận diện và chuẩn hóa {len(records):,} hồ sơ bị can từ QLAHS!\n\n"
+                    f"- Bóc tách 12 cột chuẩn & nhận dạng Tỉnh/Thành.\n"
+                    f"- Bảng Pivot Table Tỉnh/Thành × Giai đoạn đã được cập nhật."
+                )
+            messagebox.showinfo("Nạp dữ liệu thành công", msg)
+
+        self.run_async_task(
+            title="Đang nạp file Excel QLAHS",
+            loading_msg="Hệ thống đang mở và xử lý tập tin Excel...",
+            worker_fn=_worker,
+            on_success=_on_success
+        )
+
+    def on_paste_clipboard(self):
+        try:
+            clip = self.clipboard_get()
+        except Exception:
+            messagebox.showwarning("Clipboard trống", "Không tìm thấy dữ liệu trong Clipboard.")
+            return
+
+        if not clip.strip():
+            messagebox.showwarning("Clipboard trống", "Dữ liệu Clipboard rỗng.")
+            return
+
+        def _worker(update_cb):
+            update_cb("Đang phân tích cấu trúc dữ liệu từ Clipboard...", "Tách dòng và cột...")
+            return parse_clipboard_data(clip, update_cb)
+
+        def _on_success(res):
+            fmt, records = res
+            self.data_format = fmt
+            self.records = records
+            self.refresh_views()
+            unit_name = "vụ án (24 cột)" if fmt == "CASE" else "bản ghi bị can (12 cột)"
+            messagebox.showinfo(
+                "Nạp Clipboard thành công",
+                f"Đã tự động nhận diện và chuẩn hóa {len(records):,} {unit_name} từ Clipboard!"
+            )
+
+        self.run_async_task(
+            title="Đang xử lý dữ liệu Clipboard",
+            loading_msg="Hệ thống đang phân tích dữ liệu dán từ Clipboard...",
+            worker_fn=_worker,
+            on_success=_on_success
+        )
+
+    def on_export_excel(self):
+        if not self.records:
+            messagebox.showwarning("Chưa có dữ liệu", "Chưa có dữ liệu để xuất ra Excel!")
+            return
+
+        is_tin_bao = (self.data_format == "TIN_BAO")
+        is_reconcile = bool(self.records and any(r.get("nguon_du_lieu") for r in self.records))
+        is_case = (self.data_format in ("CASE", "CASE_REPORT") or is_reconcile)
+
+        time_str = datetime.now().strftime("%d%m%Y_%Hh%M")
+        if is_tin_bao:
+            init_file = f"Ket_Qua_Chuan_Hoa_Tin_Bao_{time_str}.xlsx"
+        elif is_reconcile:
+            init_file = f"Ket_Qua_Ra_Soat_Doi_Chieu_QLAHS_{time_str}.xlsx"
+        elif is_case:
+            init_file = f"Ket_Qua_Chuan_Hoa_So_Thu_Ly_Vu_An_{time_str}.xlsx"
+        else:
+            init_file = f"Ket_Qua_Chuan_Hoa_QLAHS_{time_str}.xlsx"
+
+        out_path = filedialog.asksaveasfilename(
+            title="Lưu file Excel chuẩn hóa và Pivot Table",
+            defaultextension=".xlsx",
+            initialfile=init_file,
+            filetypes=[("Excel Workbook", "*.xlsx")],
+        )
+        if not out_path:
+            return
+
+        def _worker(update_cb):
+            if is_tin_bao:
+                update_cb(f"Đang xuất {len(self.records):,} tin báo tội phạm...", "Tạo 3 Sheet: Dữ liệu chuẩn, Báo cáo tiến độ & Pivot Table...")
+                export_tin_bao_to_excel(self.records, out_path)
+            elif is_reconcile:
+                update_cb(f"Đang xuất file hợp nhất đối chiếu {len(self.records):,} vụ án...", "Tạo 3 Sheet: Dữ liệu chuẩn, Báo cáo & Pivot Table...")
+                export_reconciliation_excel(self.records, out_path)
+            elif is_case:
+                update_cb(f"Đang định dạng {len(self.records):,} vụ án...", "Đang tạo Sheet Danh sách & Pivot Table...")
+                export_case_records_to_excel(self.records, out_path)
+            else:
+                update_cb(f"Đang định dạng {len(self.records):,} dòng bị can...", "Đang tạo Sheet Danh sách & Pivot Table...")
+                export_records_to_excel(self.records, out_path)
+            return len(self.records)
+
+        def _on_success(count):
+            if is_tin_bao:
+                unit_name = "tin báo về tội phạm (30 cột, 3 Sheet)"
+            elif is_case:
+                unit_name = "vụ án (24 cột)"
+            else:
+                unit_name = "dòng bị can (12 cột)"
+            messagebox.showinfo(
+                "Xuất file Excel thành công",
+                f"Đã kết xuất thành công {count:,} {unit_name} và Bảng Pivot Table sang file:\n{out_path}"
+            )
+
+        self.run_async_task(
+            title="Đang xuất file Excel",
+            loading_msg="Đang định dạng và lưu 2 Sheet (Dữ liệu chuẩn & Pivot Table)...",
+            worker_fn=_worker,
+            on_success=_on_success
+        )
+
+    def on_clear(self):
+        self.records = []
+        self.refresh_views()
+
+
+    def on_reconcile_multiple_files(self):
+        """Mở nhiều file Excel QLAHS cùng lúc (không giới hạn 2 file),
+        tự động phân tích cấu trúc, rà soát đối chiếu chéo, bù đắp làm giàu dữ liệu và hợp nhất."""
+        if openpyxl is None:
+            messagebox.showerror("Thiếu thư viện", "Vui lòng cài đặt openpyxl: pip install openpyxl")
+            return
+
+        fpaths = filedialog.askopenfilenames(
+            title="Chọn các file Excel QLAHS cần đối chiếu & hợp nhất (Giữ Ctrl hoặc Shift để chọn nhiều file)",
+            filetypes=[("Excel files", "*.xlsx *.xlsm *.xls"), ("All files", "*.*")],
+        )
+        if not fpaths:
+            return
+
+        fpaths = list(fpaths)
+        n_files = len(fpaths)
+
+        if n_files == 1:
+            ans = messagebox.askyesno(
+                "Đang chọn 1 file",
+                f"Bạn vừa chọn 1 file:\n{os.path.basename(fpaths[0])}\n\n"
+                "Bạn có muốn chọn thêm các file khác để đối chiếu chéo không?\n"
+                "(Bấm 'Yes' để chọn thêm file, bấm 'No' để nạp luôn file này)"
+            )
+            if ans:
+                fpaths2 = filedialog.askopenfilenames(
+                    title="Chọn thêm các file Excel QLAHS khác để đối chiếu",
+                    filetypes=[("Excel files", "*.xlsx *.xlsm *.xls"), ("All files", "*.*")],
+                )
+                if fpaths2:
+                    for fp in fpaths2:
+                        if fp not in fpaths:
+                            fpaths.append(fp)
+                    n_files = len(fpaths)
+
+        self.lbl_status.config(
+            text=f"⏳ Đang đọc và đối chiếu {n_files} file QLAHS...",
+            fg="#D97706"
+        )
+        self.update_idletasks()
+
+        def _worker(update_cb):
+            parsed_files = []
+            for i, fp in enumerate(fpaths):
+                fname = os.path.basename(fp)
+                update_cb(
+                    f"Đang đọc tập tin ({i+1}/{n_files}): {fname}...",
+                    f"Phân tích cấu trúc dữ liệu..."
+                )
+                fmt, recs = load_excel_and_parse(fp, update_cb)
+                parsed_files.append((fname, fmt, recs))
+
+            update_cb(
+                f"Đang so khớp chéo & bù đắp thông tin {n_files} tập tin...",
+                f"Tổng cộng {sum(len(r) for _, _, r in parsed_files):,} bản ghi đầu vào"
+            )
+            merged, match_n, file_stats = reconcile_and_merge_multiple_case_lists(parsed_files, update_cb)
+            update_cb(
+                f"Đang chuẩn bị hiển thị danh sách 27 cột...",
+                f"Tổng hợp trọn vẹn {len(merged):,} vụ án"
+            )
+            return merged, match_n, file_stats, parsed_files
+
+        def _on_success(res):
+            merged, match_n, file_stats, parsed_files = res
+            self.data_format = "CASE"
+            self.records = merged
+            self.refresh_views()
+            self.lbl_status.config(
+                text=f"✓ Đã hợp nhất thành công {len(merged):,} vụ án từ {len(fpaths)} file QLAHS",
+                fg="#166534"
+            )
+
+            lines = [
+                f"⚡ RÀ SOÁT & HỢP NHẤT THÀNH CÔNG {len(fpaths)} TẬP TIN QLAHS:\n",
+                f"• Tổng số vụ án sau hợp nhất: {len(merged):,} vụ án",
+                f"• Tổng số lượt khớp nối & bù đắp thông tin: {match_n:,} lượt\n",
+                "Chi tiết từng file nguồn đã nạp:"
+            ]
+            for s in file_stats:
+                lines.append(f"  - {s['fname']}: {s['total']:,} vụ ({s['new']:,} mới, {s['matched']:,} khớp nối)")
+
+            lines.append(
+                f"\nToàn bộ thông tin còn thiếu giữa các file đã được tự động bù đắp đầy đủ nhất có thể!\n"
+                f"Bảng dữ liệu 27 cột đã được cập nhật hiển thị.\n"
+                f"Bạn có thể nhấn nút '📥 3. Xuất Excel' để tải tệp kết quả hoàn chỉnh."
+            )
+            messagebox.showinfo("Hoàn thành đối chiếu đa tập tin", "\n".join(lines))
+
+        self.run_async_task(
+            title=f"Đang đối chiếu & hợp nhất {n_files} File QLAHS",
+            loading_msg=f"Hệ thống đang mở và so khớp {n_files} tập tin Excel...",
+            worker_fn=_worker,
+            on_success=_on_success,
+            on_error=lambda err: messagebox.showerror("Lỗi đối chiếu", f"Không thể đối chiếu các file:\n{err}")
+        )
+
+    # Alias tương thích ngược
+    on_reconcile_two_files = on_reconcile_multiple_files
+
+if __name__ == "__main__":
+    app = QLAHSApp()
+    app.mainloop()

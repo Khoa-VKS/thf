@@ -1,0 +1,6 @@
+<USER_REQUEST>
+giờ nè, khi cung cấp danh sách xuất được trên nền tảng qlahs theo thông tin như file, nhưng không đủ hoặc không có thông tin tôi mong muốn mà nó lại nằm trong danh sách kia, bạn rà soát, đối chiếu làm sao để ra file đầu ra chuẩn có đầy đủ thông tin nhất có thể
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-18T15:22:16+07:00.
+</ADDITIONAL_METADATA>

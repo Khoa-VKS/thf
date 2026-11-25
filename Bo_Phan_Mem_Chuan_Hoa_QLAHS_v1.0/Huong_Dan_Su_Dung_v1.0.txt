@@ -1,0 +1,78 @@
+================================================================================
+VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH
+HỆ THỐNG CHUẨN HÓA & ĐỐI CHIẾU DỮ LIỆU QLAHS - OFFLINE 100%
+PHIÊN BẢN: VERSION 1.0 (NÂNG CẤP TOÀN DIỆN - BẢN PHỔ BIẾN NGHIỆP VỤ)
+Tác giả: Trần Văn Khoa - Kiểm tra viên / Viện Kiểm sát nhân dân TP. Hồ Chí Minh
+================================================================================
+
+I. GIỚI THIỆU CHUNG
+- Phần mềm chạy độc lập (Standalone Portable), KHÔNG CẦN CÀI ĐẶT Python hay bất kỳ
+  phần mềm bổ trợ nào khác. Chỉ cần nhấp đúp file .exe là chạy ngay.
+- Hoạt động 100% Offline, bảo mật an toàn dữ liệu nội bộ ngành theo đúng quy định.
+- Tương thích tốt trên tất cả các máy tính chạy Windows 10, Windows 11 (64-bit).
+
+II. CÁC TÍNH NĂNG VƯỢT TRỘI ĐÃ HOÀN THIỆN
+1. Tự động nhận diện dữ liệu đầu vào thông minh:
+   - Nguồn Tin báo & Tố giác tội phạm (Bảng chuẩn hóa 38 cột nghiệp vụ).
+   - Sổ thụ lý vụ án / Hồ sơ vụ án (Bảng chuẩn hóa 27 cột nghiệp vụ).
+   - Dữ liệu quản lý bị can (Bảng chuẩn hóa 12 cột kèm Tỉnh/Thành).
+
+2. Chuẩn hóa & Làm sạch dữ liệu tự động:
+   - Tự động tách riêng: Lãnh đạo Viện phụ trách, Lãnh đạo Phòng phụ trách, KSV chính, KSV phối hợp.
+   - Chuẩn hóa tên đơn vị gọn gàng, đồng nhất (ví dụ: 'Phòng 2 - VKSND TP.HCM', 'VKSND Khu vực 4 - TP.HCM').
+   - Lọc bỏ các chức danh thừa ở cột lãnh đạo (chỉ giữ lại họ tên sạch).
+   - Định dạng chuẩn toàn bộ ngày tháng năm sang DD/MM/YYYY.
+
+3. Hệ thống Cảnh báo tiến độ & Thời hiệu truy cứu TNHS:
+   - Đếm ngược số ngày còn lại đến thời điểm hết thời hiệu truy cứu TNHS.
+   - Nhãn cảnh báo màu sắc nghiệp vụ trực quan:
+     🔴 Khẩn cấp (Còn ≤ 30 ngày) hoặc ⚠️ Đã quá hạn
+     🟠 Rất gấp (Còn ≤ 60 ngày)
+     🟡 Sắp hết hạn (Còn ≤ 90 ngày)
+     🟢 Bình thường (Còn > 90 ngày)
+
+4. Đối chiếu & Hợp nhất đa nguồn QLAHS (Multi-file Reconcile):
+   - Nạp cùng lúc nhiều file Excel để so khớp chéo.
+   - Tự động khớp theo Mã vụ án / Mã tin báo và Số QĐ khởi tố / Số thụ lý.
+   - Cơ chế bù đắp dữ liệu thông minh: tự động ghép thông tin còn thiếu từ các file khác.
+   - Dashboard đối chiếu trực quan với biểu đồ phân bổ và xuất Excel 27-38 cột.
+
+5. [MỚI] So sánh biến động giữa 2 kỳ báo cáo (Diff Analysis - Nút số 5):
+   - So sánh chéo Kỳ trước và Kỳ này (hoặc nạp 2 file Excel bất kỳ).
+   - Tự động phân loại 4 nhóm biến động:
+     + MỚI THỤ LÝ: Hồ sơ mới phát sinh trong kỳ.
+     + ĐÃ GIẢI QUYẾT: Hồ sơ đã được giải quyết / kết thúc.
+     + NGUY CƠ KHẨN CẤP: Hồ sơ chuyển mức khẩn cấp thời hiệu TNHS hoặc quá hạn.
+     + TỒN ĐỌNG TIẾP TỤC: Hồ sơ tiếp tục theo dõi giải quyết.
+   - Xuất file Báo cáo Biến động Excel 5 Sheet kèm biểu đồ cột (BarChart) tự động.
+
+6. [MỚI] Trích yếu số liệu báo cáo nghiệp vụ tự động (Executive Brief - Nút số 6):
+   - Tự động soạn thảo văn bản trích yếu số liệu chuẩn văn phong ngành Kiểm sát.
+   - Tích hợp 1-click sao chép Clipboard, xuất file Word (.doc) và Text (.txt) phục vụ
+     báo cáo Lãnh đạo Viện / Lãnh đạo Phòng tức thì.
+
+7. [MỚI] Bảng Cài đặt cấu hình mở (Settings - Nút số ⚙️):
+   - Cho phép tùy chỉnh tên đơn vị VKS, tên tác giả bản quyền.
+   - Tùy chỉnh các mốc ngày cảnh báo thời hiệu (Khẩn cấp, Rất gấp, Sắp hết hạn).
+   - Quản lý từ điển viết tắt đơn vị thụ lý (Ví dụ: P2 -> Phòng 2 - VKSND TP.HCM).
+   - Dữ liệu cấu hình tự động lưu vào tệp 'config_qlahs.json' đặt cùng thư mục file .exe.
+
+8. [MỚI] Biểu đồ trực quan sinh động (Visual Distribution & Excel Charts):
+   - Thanh tiến độ trực quan xếp chồng (Stacked Distribution Bar) trên giao diện Desktop.
+   - Tự động nhúng biểu đồ BarChart & PieChart trực tiếp vào Sheet Ma trận Excel xuất ra.
+
+III. HƯỚNG DẪN THAO TÁC NHANH
+- Bước 1: Mở file 'Phan_Mem_Chuan_Hoa_QLAHS_v1.0.exe'.
+- Bước 2: Nạp dữ liệu bằng cách chọn file Excel hoặc dán clipboard (Ctrl+V).
+- Bước 3: Xem các thông số phân tích trên thẻ KPI và bảng danh sách.
+- Bước 4: Sử dụng các tính năng chuyên sâu:
+  + Bấm nút 3: Xuất file Excel chuẩn hóa kèm biểu đồ tổng hợp.
+  + Bấm nút 4: Đối chiếu & hợp nhất từ 2 đến nhiều file QLAHS.
+  + Bấm nút 5: So sánh biến động 2 kỳ và xuất báo cáo chênh lệch.
+  + Bấm nút 6: Lấy đoạn văn bản trích yếu báo cáo Lãnh đạo Viện / Phòng.
+  + Bấm nút ⚙️: Điều chỉnh cấu hình, tác giả, mốc cảnh báo theo ý muốn.
+
+--------------------------------------------------------------------------------
+TRẦN VĂN KHOA - KIỂM TRA VIÊN / VIỆN KIỂM SÁT NHÂN DÂN TP. HỒ CHÍ MINH
+Chúc các đồng chí đồng nghiệp hoàn thành xuất sắc nhiệm vụ công tác kiểm sát!
+================================================================================

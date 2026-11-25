@@ -1,0 +1,2884 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH - Hệ thống Tổng hợp và Xử lý Dữ liệu NTQLAHS</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .table-container::-webkit-scrollbar {
+      height: 8px;
+      width: 8px;
+    }
+    .table-container::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .table-container::-webkit-scrollbar-thumb {
+      background: #94a3b8;
+      border-radius: 4px;
+    }
+    .cell-edit:focus {
+      outline: 2px solid #2563eb;
+      background-color: #eff6ff;
+    }
+    .vks-gradient {
+      background: linear-gradient(135deg, #07172c 0%, #0a2540 45%, #153e75 100%);
+    }
+    .gold-glow {
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.35);
+    }
+    .tab-active {
+      background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%) !important;
+      color: #ffffff !important;
+      border-color: #ef4444 !important;
+      box-shadow: 0 2px 6px rgba(185, 28, 28, 0.4);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- ========================================================================= -->
+  <!-- TOP NAVIGATION HEADER - VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH     -->
+  <!-- ========================================================================= -->
+  <header class="vks-gradient text-white border-b-2 border-amber-400 shadow-xl">
+    <!-- Top glowing rainbow gold stripe -->
+    <div class="h-1.5 bg-gradient-to-r from-amber-500 via-yellow-300 via-rose-500 to-amber-500"></div>
+
+    <div class="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <!-- Logo & Tiêu đề ngành Kiểm sát TP. Hồ Chí Minh -->
+      <div class="flex items-center gap-3.5">
+        <!-- Hình ảnh Trụ sở VKSND TP. Hồ Chí Minh -->
+        <div class="h-14 w-24 rounded-xl overflow-hidden border-2 border-amber-300 shadow-xl shrink-0 gold-glow bg-slate-900">
+          <img src="logo_header_vksnd_tphcm.png" alt="Trụ sở VKSND TP. Hồ Chí Minh" class="w-full h-full object-cover" />
+        </div>
+
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs sm:text-sm font-extrabold tracking-wide text-amber-300 uppercase flex items-center gap-1.5">
+              <span>🏛️</span> VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH
+            </span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
+              100% Offline Bảo Mật
+            </span>
+          </div>
+          <h1 class="text-base sm:text-xl font-black tracking-tight text-white flex items-center gap-2 mt-0.5">
+            HỆ THỐNG TỔNG HỢP VÀ XỬ LÝ DỮ LIỆU NTQLAHS
+          </h1>
+          <p class="text-xs text-sky-200 mt-0.5">
+            Tự động trích xuất Tỉnh/Thành từ CQĐT &bull; Chuẩn hóa 12 trường &bull; Bảng ma trận Pivot Table số người, giai đoạn &amp; trạng thái hồ sơ
+          </p>
+        </div>
+      </div>
+
+      <!-- Slogan Ngành Kiểm Sát + Tab Switcher -->
+      <div class="flex flex-col items-end gap-2">
+        <!-- Châm ngôn 5 chữ vàng Bác Hồ dạy ngành Kiểm sát -->
+        <div class="hidden md:flex items-center gap-1.5 text-[11px] font-bold text-amber-200 bg-red-950/70 px-3.5 py-1 rounded-full border border-amber-400/40 shadow-sm">
+          <span class="text-amber-400">★</span>
+          <span>Công minh &bull; Chính trực &bull; Khách quan &bull; Thận trọng &bull; Khiêm tốn</span>
+          <span class="text-amber-400">★</span>
+        </div>
+
+        <!-- View Switcher Tabs -->
+        <div class="flex items-center gap-1.5 bg-slate-950/80 p-1.5 rounded-xl border border-slate-700/80 shadow-inner">
+          <button id="tabBtnWorkspace" type="button" class="tab-active px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5">
+            <span>📋</span> Bàn làm việc &amp; Bảng 12 Cột
+          </button>
+          <button id="tabBtnPivot" type="button" class="px-3.5 py-1.5 rounded-lg text-xs font-bold text-amber-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>📊</span> Bảng Pivot Table Tổng Quan
+          </button>
+          <button id="tabBtnCompare" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">
+            🔍 Đối chiếu (5 → 12 Cột)
+          </button>
+          <button id="tabBtnDesktop" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">
+            💻 Bản Desktop (.py / .exe)
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Toast Notification -->
+  <div id="toastBox" class="fixed bottom-5 right-5 z-50 hidden max-w-md bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border-2 border-amber-400 flex items-center gap-3 text-sm">
+    <span id="toastIcon" class="w-3.5 h-3.5 rounded-full bg-emerald-400 shrink-0"></span>
+    <span id="toastText" class="font-semibold">Đã xử lý dữ liệu thành công!</span>
+  </div>
+
+  <!-- Modal Loading Nổi Bật Cho Dữ Liệu Nặng (Chống Đơ / Treo Trình Duyệt) -->
+  <div id="appLoadingModal" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center hidden">
+    <div class="bg-white rounded-2xl shadow-2xl border-2 border-amber-500 p-6 max-w-md w-full mx-4 text-center transform scale-100">
+      <div class="relative w-16 h-16 mx-auto mb-3">
+        <div class="w-16 h-16 rounded-full border-4 border-amber-200 border-t-amber-600 animate-spin"></div>
+        <div class="absolute inset-0 flex items-center justify-center text-xl">🏛️</div>
+      </div>
+      <div class="inline-block bg-[#07172C] text-[#F59E0B] text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+        VIỆN KIỂM SÁT NHÂN DÂN TP. HỒ CHÍ MINH
+      </div>
+      <h3 id="appLoadingTitle" class="text-base font-bold text-slate-900">Đang xử lý dữ liệu hồ sơ QLAHS...</h3>
+      <p id="appLoadingDetail" class="text-xs text-slate-600 mt-1.5 font-medium">Hệ thống đang phân tích bóc tách các khối thông tin án...</p>
+      
+      <!-- Thanh chuyển động Progress bar -->
+      <div class="w-full bg-slate-100 rounded-full h-2 mt-4 overflow-hidden border border-slate-200">
+        <div class="bg-gradient-to-r from-amber-500 via-blue-700 to-amber-500 h-2 rounded-full w-full animate-pulse"></div>
+      </div>
+      <p class="text-[11px] text-slate-400 mt-2 italic">Vui lòng đợi trong giây lát, hệ thống đang bóc tách và tính toán...</p>
+    </div>
+  </div>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-5 space-y-5">
+
+    <!-- ========================================================================= -->
+    <!-- TAB 1: WORKSPACE (NHẬP FILE / DÁN & BẢNG 12 CỘT CHUẨN CÓ TỈNH/THÀNH)     -->
+    <!-- ========================================================================= -->
+    <section id="viewWorkspace" class="space-y-5">
+
+      <!-- 5 KHỐI THẺ KPI MÀU SẮC SINH ĐỘNG -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+        <!-- Card 1: Bị can / Vụ án (Đỏ Ruby) -->
+        <div class="bg-gradient-to-br from-red-50 via-rose-50 to-white rounded-xl p-3.5 border-2 border-rose-300 shadow-sm relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span id="kpiLabelTotal" class="text-xs font-black text-rose-800 uppercase tracking-wider">Tổng số bị can</span>
+            <span class="w-6 h-6 rounded-full bg-red-600 text-white text-xs flex items-center justify-center font-bold">👤</span>
+          </div>
+          <div id="kpiTotal" class="text-3xl font-black text-red-700 mt-1.5">2</div>
+          <div id="kpiSubTotal" class="text-[11px] font-semibold text-rose-600 mt-0.5">Đối tượng đã khởi tố</div>
+        </div>
+
+        <!-- Card 2: Vụ án / Sắp hết thời hiệu (Xanh Dương Royal) -->
+        <div class="bg-gradient-to-br from-blue-50 via-sky-50 to-white rounded-xl p-3.5 border-2 border-blue-300 shadow-sm relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span id="kpiLabelCases" class="text-xs font-black text-blue-900 uppercase tracking-wider">Số vụ án</span>
+            <span class="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">📁</span>
+          </div>
+          <div id="kpiCases" class="text-3xl font-black text-blue-800 mt-1.5">2</div>
+          <div id="kpiSubCases" class="text-[11px] font-semibold text-blue-600 mt-0.5">Theo mã vụ án QLAHS</div>
+        </div>
+
+        <!-- Card 3: Tỉnh/Thành / Đơn vị VKS (Xanh Ngọc Emerald) -->
+        <div class="bg-gradient-to-br from-emerald-50 via-teal-50 to-white rounded-xl p-3.5 border-2 border-emerald-300 shadow-sm relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span id="kpiLabelProvinces" class="text-xs font-black text-emerald-900 uppercase tracking-wider">Tỉnh / Thành phố</span>
+            <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold">🏛️</span>
+          </div>
+          <div id="kpiProvinces" class="text-3xl font-black text-emerald-700 mt-1.5">2</div>
+          <div id="kpiSubProvinces" class="text-[11px] font-semibold text-emerald-600 mt-0.5">Nhận dạng từ CQĐT</div>
+        </div>
+
+        <!-- Card 4: Giai đoạn / Phân loại tội (Xanh Mòng Két Teal) -->
+        <div class="bg-gradient-to-br from-teal-50 via-cyan-50 to-white rounded-xl p-3.5 border-2 border-teal-300 shadow-sm relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span id="kpiLabelStages" class="text-xs font-black text-teal-900 uppercase tracking-wider">Giai đoạn tố tụng</span>
+            <span class="w-6 h-6 rounded-full bg-teal-600 text-white text-xs flex items-center justify-center font-bold">⚖️</span>
+          </div>
+          <div id="kpiStages" class="text-xs font-bold text-teal-800 mt-2 truncate">Điều tra: 1 | Sơ thẩm: 1</div>
+          <div id="kpiSubStages" class="text-[11px] font-medium text-teal-600 mt-1">Khởi tố, ĐT, Truy tố, Xử</div>
+        </div>
+
+        <!-- Card 5: Trạng thái hồ sơ / vụ án (Vàng Cam Hổ Phách Amber) -->
+        <div class="bg-gradient-to-br from-amber-50 via-yellow-50 to-white rounded-xl p-3.5 border-2 border-amber-300 shadow-sm relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span id="kpiLabelStatus" class="text-xs font-black text-amber-900 uppercase tracking-wider">Trạng thái hồ sơ</span>
+            <span class="w-6 h-6 rounded-full bg-amber-600 text-white text-xs flex items-center justify-center font-bold">🏷️</span>
+          </div>
+          <div id="kpiStatus" class="text-xs font-bold text-amber-800 mt-2 truncate">Đình nã: 2</div>
+          <div id="kpiSubStatus" class="text-[11px] font-medium text-amber-600 mt-1">Đình nã, Truy nã, Tạm ĐC</div>
+        </div>
+      </div>
+
+      <!-- Input & Options Panel -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- Left: Upload Excel file -->
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span class="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-black shadow-sm">1</span>
+                Nạp file Excel NTQLAHS (.xlsx)
+              </h2>
+              <span class="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold border border-emerald-300">Offline 100%</span>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">
+              Chọn file Excel trích xuất hoặc copy từ phần mềm QLAHS (kể cả dạng dữ liệu 3-5 dòng bị tách rời).
+            </p>
+            <label for="fileInputXlsx" id="dropZone" class="border-2 border-dashed border-blue-400 hover:border-blue-600 bg-blue-50/50 hover:bg-blue-100/60 transition rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer text-center">
+              <div class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-lg mb-1.5 shadow-md">
+                ↑
+              </div>
+              <span class="text-xs font-bold text-blue-900">Bấm để chọn file Excel (.xlsx) hoặc kéo thả vào đây</span>
+              <span id="loadedFileName" class="text-[11px] text-slate-600 mt-1 font-medium bg-white px-2 py-0.5 rounded border border-slate-200">Đang nạp sẵn: Dữ liệu mẫu (TP.HCM &amp; Hà Tĩnh)</span>
+              <input id="fileInputXlsx" type="file" accept=".xlsx,.xls,.csv,.txt" class="hidden" />
+            </label>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100">
+            <button id="btnLoadSample" type="button" class="text-xs font-bold text-blue-700 hover:text-blue-900 underline flex items-center gap-1">
+              <span>↺</span> Nạp lại 2 vụ án mẫu ban đầu
+            </button>
+            <button id="btnDownloadRawSample" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+              Tải File Excel Gốc Mẫu (.xlsx)
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Direct Paste from Excel or QLAHS Web -->
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span class="w-6 h-6 rounded-lg bg-teal-600 text-white flex items-center justify-center text-xs font-black shadow-sm">2</span>
+                Dán dữ liệu trực tiếp từ Clipboard (Ctrl+V)
+              </h2>
+              <span class="text-[11px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full font-bold border border-teal-300">Copy từ bảng NTQLAHS</span>
+            </div>
+            <textarea id="pasteInputArea" rows="4" placeholder="Bôi đen bảng trên phần mềm NTQLAHS -> nhấn Ctrl+C -> bấm vào đây nhấn Ctrl+V rồi nhấn nút 'Phân tích & Chuẩn hóa'..." class="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-mono text-slate-700 focus:ring-2 focus:ring-blue-600 focus:outline-none"></textarea>
+          </div>
+
+          <!-- Normalization Rules & Action Buttons -->
+          <div class="flex flex-wrap items-center justify-between gap-3 mt-3 pt-2 border-t border-slate-100">
+            <div class="flex flex-wrap items-center gap-4 text-xs text-slate-700">
+              <label class="inline-flex items-center gap-1.5 cursor-pointer font-medium">
+                <input id="chkAppendMode" type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                <span>Gộp nối tiếp vào danh sách</span>
+              </label>
+              <label class="inline-flex items-center gap-1.5 cursor-pointer font-medium">
+                <input id="chkShortLaw" type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                <span>Chỉ lấy số Điều luật (VD: Điều 104)</span>
+              </label>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button id="btnParsePaste" type="button" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-teal-600 to-emerald-700 hover:from-teal-700 hover:to-emerald-800 text-white shadow-md transition flex items-center gap-1.5">
+                <span>⚡</span> Phân tích &amp; Chuẩn hóa
+              </button>
+              <button id="btnClearPaste" type="button" class="px-3 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-600 transition">
+                Xóa ô dán
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main 12-Column Output Table Card -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden">
+        <!-- Toolbar -->
+        <div class="p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-slate-50 via-blue-50/30 to-slate-50">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <div class="flex items-center gap-2 font-black text-slate-900 text-sm">
+              <span class="w-3 h-3 rounded-full bg-red-600 animate-ping"></span>
+              <span id="tableTitleText">Bảng Kết Quả Chuẩn Hóa 12 Cột (VKSND TP. Hồ Chí Minh)</span>
+            </div>
+            <input id="searchFilter" type="text" placeholder="🔍 Tìm bị can, mã vụ, CCCD, CQĐT..." class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs w-56 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-sm" />
+            
+            <!-- Province Filter Dropdown -->
+            <select id="provinceFilter" class="px-2.5 py-1.5 rounded-xl border-2 border-sky-300 text-xs bg-sky-50 text-sky-900 font-bold shadow-sm">
+              <option value="ALL">🏛️ Tất cả Tỉnh/Thành</option>
+            </select>
+
+            <select id="stageFilter" class="px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs bg-white text-slate-700 font-medium">
+              <option value="ALL">⚖️ Tất cả giai đoạn</option>
+              <option value="Điều tra">Điều tra</option>
+              <option value="Truy tố">Truy tố</option>
+              <option value="Sơ thẩm">Sơ thẩm</option>
+              <option value="Phúc thẩm">Phúc thẩm</option>
+            </select>
+
+            <select id="statusFilter" class="px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs bg-white text-slate-700 font-medium">
+              <option value="ALL">🏷️ Tất cả trạng thái</option>
+              <option value="Đình nã">Đình nã</option>
+              <option value="Truy nã">Truy nã</option>
+              <option value="Tạm đình chỉ">Tạm đình chỉ</option>
+            </select>
+
+            <select id="urgencyFilter" class="px-2.5 py-1.5 rounded-xl border-2 border-rose-300 text-xs bg-rose-50 text-rose-950 font-bold shadow-sm">
+              <option value="ALL">🚨 Tất cả thời hiệu</option>
+              <option value="🔴">🔴 Khẩn cấp (≤ 7 ngày)</option>
+              <option value="🟠">🟠 Rất gấp (8-15 ngày)</option>
+              <option value="🟡">🟡 Sắp hết hạn (16-30 ngày)</option>
+            </select>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="btnQuickGoPivot" type="button" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 shadow-md transition flex items-center gap-1.5">
+              <span>📊</span> Xem Bảng Pivot Table
+            </button>
+            <button id="btnAddRow" type="button" class="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 transition">
+              + Thêm dòng
+            </button>
+            <button id="btnCopyTSV" type="button" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 transition">
+              Copy Bảng 12 Cột
+            </button>
+            <button id="btnExportXlsx" type="button" class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-700 to-rose-800 hover:from-red-800 hover:to-rose-900 text-white shadow-md transition flex items-center gap-1.5">
+              <span>📥</span> <span id="exportBtnText">Xuất Excel (12 Cột &amp; Pivot)</span>
+            </button>
+            <button id="btnClearAll" type="button" class="px-2.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition">
+              Xóa hết
+            </button>
+          </div>
+        </div>
+
+        <!-- 12-Column Table -->
+        <div class="table-container overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr id="tableHeaderRow" class="bg-[#0A2540] text-white font-bold tracking-wide">
+                <th class="py-3 px-2 border-r border-slate-700 text-center w-11">STT</th>
+                <th class="py-3 px-3 border-r border-slate-700 min-w-[165px]">Mã vụ án</th>
+                <th class="py-3 px-3 border-r border-slate-700 min-w-[220px]">Tên vụ án</th>
+                <th class="py-3 px-3 border-r border-slate-700 min-w-[180px]">Cơ quan CSĐT</th>
+                <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[145px] bg-[#153E75] text-amber-300 font-black">
+                  🏛️ Tỉnh / Thành phố
+                </th>
+                <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[100px]">Giai đoạn</th>
+                <th class="py-3 px-3 border-r border-slate-700 min-w-[175px]">Mã bị can</th>
+                <th class="py-3 px-3 border-r border-slate-700 min-w-[145px]">Tên bị can</th>
+                <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[95px]">Ngày sinh</th>
+                <th class="py-3 px-3 border-r border-slate-700 min-w-[120px]">Số CCCD</th>
+                <th class="py-3 px-3 border-r border-slate-700 min-w-[220px]">Điều luật</th>
+                <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[120px]">Trạng thái</th>
+                <th class="py-3 px-2 text-center w-11">Xóa</th>
+              </tr>
+            </thead>
+            <tbody id="resultTableBody" class="divide-y divide-slate-200">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between text-xs text-slate-600">
+          <span class="flex items-center gap-1.5">
+            <span class="text-blue-600 font-bold">💡 Mẹo:</span> Bạn có thể nhấp đúp trực tiếp vào bất kỳ ô nào trên bảng để chỉnh sửa nhanh nội dung trước khi xuất file.
+          </span>
+          <span id="rowCountFooter" class="font-bold text-slate-800 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-sm">Hiển thị 2 / 2 bản ghi</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 2: PIVOT TABLE & DASHBOARD TỔNG HỢP (TỈNH/THÀNH - GIAI ĐOẠN...)       -->
+    <!-- ========================================================================= -->
+    <section id="viewPivot" class="hidden space-y-5">
+
+      <!-- Header & Action Bar của Bảng Pivot -->
+      <div class="bg-gradient-to-r from-[#07172C] via-[#0A2540] to-[#153E75] rounded-2xl p-5 text-white shadow-lg border-b-2 border-amber-400">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full bg-amber-400/25 text-amber-300 border border-amber-400/50 text-[11px] font-black uppercase tracking-wider">
+                VKSND TP. Hồ Chí Minh &bull; Thống kê nghiệp vụ
+              </span>
+              <span class="text-xs text-sky-200">Phục vụ báo cáo Viện trưởng &amp; Ban Lãnh đạo</span>
+            </div>
+            <h2 class="text-lg sm:text-2xl font-black text-white mt-1.5 flex items-center gap-2">
+              BẢNG PIVOT TABLE MA TRẬN TỔNG HỢP THEO TỈNH/THÀNH &amp; GIAI ĐOẠN TỐ TỤNG
+            </h2>
+            <p class="text-xs text-slate-200 mt-1">
+              Phân tích chéo ma trận đa chiều: Số lượng bị can &amp; Số vụ án trên từng địa bàn theo các giai đoạn Điều tra, Truy tố, Sơ thẩm, Phúc thẩm
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button id="btnExportPivotXlsx" type="button" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 shadow-md transition flex items-center gap-1.5">
+              <span>📥</span> Xuất Bảng Pivot (.xlsx)
+            </button>
+            <button id="btnCopyPivotTable" type="button" class="px-4 py-2.5 rounded-xl text-xs font-black bg-white/15 hover:bg-white/25 text-white border border-white/40 transition flex items-center gap-1.5 shadow-sm">
+              <span>📋</span> Copy Bảng Pivot (Dán Word/Excel)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Preset Buttons -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="font-black text-slate-800 uppercase tracking-wide">Mẫu thống kê nhanh:</span>
+            <button id="presetProvStage" type="button" class="px-3.5 py-2 rounded-xl font-black bg-blue-100 text-blue-900 border-2 border-blue-400 hover:bg-blue-200 transition shadow-sm">
+              🏛️ 1. Tỉnh/Thành × Giai đoạn (Số người)
+            </button>
+            <button id="presetProvStatus" type="button" class="px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-800 hover:bg-slate-200 transition">
+              🏷️ 2. Tỉnh/Thành × Trạng thái (Đình nã, Truy nã...)
+            </button>
+            <button id="presetFullReport" type="button" class="px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-800 hover:bg-slate-200 transition">
+              📑 3. Báo Cáo Toàn Diện (Số vụ + Bị can + GĐ + Trạng thái)
+            </button>
+            <button id="presetStageStatus" type="button" class="px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-800 hover:bg-slate-200 transition">
+              ⚖️ 4. Giai đoạn × Trạng thái
+            </button>
+          </div>
+
+          <!-- Pivot Configuration Selectors -->
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="text-slate-600 font-bold">Trục Dòng:</span>
+            <select id="pivotRowSelect" class="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs shadow-sm">
+              <option value="tinhThanh">Tỉnh / Thành phố</option>
+              <option value="cqdt">Cơ quan CSĐT</option>
+              <option value="giaiDoan">Giai đoạn</option>
+              <option value="trangThai">Trạng thái hồ sơ</option>
+            </select>
+
+            <span class="text-slate-600 font-bold">Trục Cột:</span>
+            <select id="pivotColSelect" class="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs shadow-sm">
+              <option value="giaiDoan">Giai đoạn tố tụng</option>
+              <option value="trangThai">Trạng thái hồ sơ</option>
+              <option value="tinhThanh">Tỉnh / Thành phố</option>
+              <option value="NONE">(Không chia cột - Chỉ tổng)</option>
+            </select>
+
+            <span class="text-slate-600 font-bold">Giá trị:</span>
+            <select id="pivotValueSelect" class="px-2.5 py-1.5 rounded-xl border-2 border-emerald-300 bg-emerald-50 font-black text-emerald-900 text-xs shadow-sm">
+              <option value="defendants">Số bị can (Người)</option>
+              <option value="cases">Số vụ án</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pivot Table Card & Visual Distribution -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <!-- Main Matrix Pivot Table -->
+        <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden flex flex-col justify-between">
+          <div>
+            <div class="p-4 bg-gradient-to-r from-slate-50 via-amber-50/40 to-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <h3 id="pivotTableTitle" class="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-600"></span>
+                Ma Trận Pivot Table: Tỉnh / Thành Phố × Giai Đoạn Tố Tụng
+              </h3>
+              <span id="pivotMetaSubtitle" class="text-xs font-bold text-blue-900 bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200">Đơn vị: Bị can (người)</span>
+            </div>
+
+            <div class="table-container overflow-x-auto">
+              <table id="pivotMatrixTable" class="w-full text-left border-collapse text-xs">
+                <!-- Generated dynamically by renderPivotTable() -->
+              </table>
+            </div>
+          </div>
+
+          <div class="p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 border-t border-amber-200 text-xs text-amber-950 flex items-center justify-between font-medium">
+            <span>✨ Các ô có dữ liệu được làm nổi bật màu xanh/vàng tự động để dễ dàng nhận diện địa bàn trọng điểm.</span>
+            <span id="pivotGrandTotalSummary" class="font-black text-red-800 text-sm bg-white px-3 py-1 rounded-lg border border-amber-300 shadow-sm">Tổng cộng: 2 bị can</span>
+          </div>
+        </div>
+
+        <!-- Visual Distribution Bar Chart -->
+        <div class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-md p-4 space-y-4 flex flex-col justify-between">
+          <div>
+            <div class="border-b border-slate-200 pb-3 mb-3">
+              <h3 class="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                <span>📈</span> Biểu Đồ Phân Bổ Địa Bàn Thụ Lý
+              </h3>
+              <p class="text-[11px] text-slate-500 mt-0.5">Tỷ trọng số lượng bị can theo từng địa phương</p>
+            </div>
+
+            <!-- Distribution Bars List -->
+            <div id="pivotChartBars" class="space-y-3 max-h-96 overflow-y-auto pr-1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Summary Highlights Box -->
+          <div class="bg-gradient-to-br from-blue-50 to-indigo-50/60 rounded-xl p-3.5 border border-blue-200 text-xs space-y-2">
+            <div class="font-black text-blue-950 text-xs uppercase tracking-wide flex items-center gap-1.5">
+              <span>📌</span> Nhận định nghiệp vụ VKSND:
+            </div>
+            <div id="pivotInsights" class="text-slate-700 space-y-1.5 text-xs leading-relaxed">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 3: ĐỐI CHIẾU CẤU TRÚC GỐC (5 CỘT NHIỀU DÒNG -> 12 CỘT CHUẨN)         -->
+    <!-- ========================================================================= -->
+    <section id="viewCompare" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 font-black text-xs">VKSND TP. Hồ Chí Minh</span>
+            <h2 class="text-base font-bold text-slate-900">Quy tắc nhận diện Tỉnh/Thành &amp; bóc tách tự động từ dữ liệu NTQLAHS</h2>
+          </div>
+          <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+            Khi copy từ phần mềm Quản lý án hình sự (NTQLAHS) dán xuống Excel, mỗi hồ sơ bị tách thành 3–5 dòng rời nhau. Hệ thống sử dụng mốc neo <code class="bg-slate-100 px-1.5 py-0.5 rounded font-semibold text-blue-800">Giai đoạn: ...</code> ở cột B để gom nhóm từng khối hồ sơ, đồng thời sử dụng bộ từ điển 63 tỉnh/thành phố để tự động nhận dạng chính xác địa phương thụ lý:
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <!-- Bảng 1: Dữ liệu thô -->
+          <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
+            <h3 class="font-bold text-slate-900 mb-2 flex items-center gap-1.5">
+              <span class="w-4 h-4 rounded-full bg-slate-300 text-slate-800 flex items-center justify-center text-[10px] font-bold">1</span>
+              Dữ liệu thô khi copy từ phần mềm NTQLAHS (5 cột × 4 dòng / hồ sơ)
+            </h3>
+            <div class="overflow-x-auto bg-white border border-slate-300 rounded-lg">
+              <table class="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr class="bg-slate-200 text-slate-800 font-semibold">
+                    <th class="border border-slate-300 p-1.5">A (STT)</th>
+                    <th class="border border-slate-300 p-1.5">B (Thông tin hồ sơ)</th>
+                    <th class="border border-slate-300 p-1.5">C (Họ tên)</th>
+                    <th class="border border-slate-300 p-1.5">D (Tội danh)</th>
+                    <th class="border border-slate-300 p-1.5">E (Trạng thái)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                    <td class="border border-slate-200 p-1.5 text-teal-700 font-medium">Giai đoạn: Sơ thẩm</td>
+                    <td class="border border-slate-200 p-1.5 text-blue-800 underline">VA_E01.59.010_2606_0090_001</td>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                  </tr>
+                  <tr>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                    <td class="border border-slate-200 p-1.5 text-blue-800 underline">VA_E01.59.010_2606_0090</td>
+                    <td class="border border-slate-200 p-1.5 font-bold">Nguyễn Ngọc Lài</td>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                  </tr>
+                  <tr>
+                    <td class="border border-slate-200 p-1.5 text-center font-bold">2</td>
+                    <td class="border border-slate-200 p-1.5 font-bold">Nguyễn Ngọc Lài. Đ138</td>
+                    <td class="border border-slate-200 p-1.5">Ngày sinh: 20/12/1985</td>
+                    <td class="border border-slate-200 p-1.5">Điều 138 - Tội trộm cắp tài sản</td>
+                    <td class="border border-slate-200 p-1.5 text-amber-800 font-semibold">Đình nã</td>
+                  </tr>
+                  <tr>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                    <td class="border border-slate-200 p-1.5 text-sky-800 font-semibold bg-sky-50">Công an tỉnh Hà Tĩnh</td>
+                    <td class="border border-slate-200 p-1.5">CCCD: 000000000003</td>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                    <td class="border border-slate-200 p-1.5 text-slate-400"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Bảng 2: Ánh xạ 12 cột -->
+          <div class="border border-blue-200 rounded-xl p-4 bg-blue-50/40 space-y-2">
+            <h3 class="font-bold text-blue-950 mb-2 flex items-center gap-1.5">
+              <span class="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">2</span>
+              Sơ đồ ánh xạ sang 12 cột chuẩn hóa và phân tích
+            </h3>
+            <ul class="space-y-1.5 text-slate-700 text-xs">
+              <li><span class="font-semibold text-slate-900">• Cột 1 (STT):</span> Số thứ tự của hồ sơ bị can.</li>
+              <li><span class="font-semibold text-slate-900">• Cột 2 (Mã vụ án):</span> Dòng thứ 2 của cột B (<code class="bg-white px-1 rounded">VA 010214...</code>).</li>
+              <li><span class="font-semibold text-slate-900">• Cột 3 (Tên vụ án):</span> Dòng tên vụ án in đậm của cột B.</li>
+              <li><span class="font-semibold text-slate-900">• Cột 4 (Cơ quan CSĐT):</span> Dòng CQĐT (<code class="bg-white px-1 rounded">Công an Thành phố Hồ Chí Minh</code>, <code class="bg-white px-1 rounded">Công an tỉnh Hà Tĩnh</code>).</li>
+              <li class="p-1.5 rounded-lg bg-amber-100 border border-amber-300 text-amber-950 font-bold">
+                <span class="text-red-800">★ Cột 5 (Tỉnh / Thành phố - MỚI):</span> Tự động phân tích từ chuỗi CQĐT để trích xuất chuẩn hóa: <code class="bg-white px-1.5 py-0.5 rounded text-blue-900 font-black">TP. Hồ Chí Minh</code>, <code class="bg-white px-1.5 py-0.5 rounded text-blue-900 font-black">Hà Tĩnh</code>, <code class="bg-white px-1.5 py-0.5 rounded text-blue-900 font-black">Hà Nội</code>, <code class="bg-white px-1.5 py-0.5 rounded text-blue-900 font-black">Đà Nẵng</code>...
+              </li>
+              <li><span class="font-semibold text-slate-900">• Cột 6 (Giai đoạn):</span> Trích từ <code class="bg-white px-1 rounded">Giai đoạn: ...</code> (Điều tra, Truy tố, Sơ thẩm...).</li>
+              <li><span class="font-semibold text-slate-900">• Cột 7 (Mã bị can):</span> Dòng đầu tiên của cột C (giữ nguyên số 0 đầu bằng kiểu Text).</li>
+              <li><span class="font-semibold text-slate-900">• Cột 8 (Tên bị can):</span> Họ tên đầy đủ của bị can.</li>
+              <li><span class="font-semibold text-slate-900">• Cột 9 (Ngày sinh):</span> Tách từ tiền tố <code class="bg-white px-1 rounded">Ngày sinh:</code>.</li>
+              <li><span class="font-semibold text-slate-900">• Cột 10 (Số CCCD):</span> Tách từ tiền tố <code class="bg-white px-1 rounded">CCCD:</code> (giữ nguyên 12 số định dạng Text).</li>
+              <li><span class="font-semibold text-slate-900">• Cột 11 &amp; 12 (Điều luật &amp; Trạng thái hồ sơ):</span> Gom từ cột D và E (Đình nã, Truy nã, Tạm đình chỉ...).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 4: MÃ NGUỒN PYTHON DESKTOP (.PY / .EXE OFFLINE)                       -->
+    <!-- ========================================================================= -->
+    <section id="viewDesktop" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 font-black text-xs">VKSND TP. Hồ Chí Minh</span>
+              <h2 class="text-base font-bold text-slate-900">Mã nguồn Python Desktop Tkinter + OpenPyXL (Chủ đề VKSND TP.HCM)</h2>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Hệ thống tổng hợp và xử lý dữ liệu NTQLAHS với giao diện sinh động và bảng Pivot Table xuất Excel 2 Sheet.
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btnCopyPythonCode" type="button" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition">
+              Copy mã nguồn Python
+            </button>
+            <button id="btnDownloadPythonFile" type="button" class="px-4 py-2 rounded-xl text-xs font-black bg-[#0A2540] hover:bg-[#153E75] text-white transition shadow-sm">
+              Tải file Phan_Mem_Chuan_Hoa_QLAHS_Desktop.py
+            </button>
+          </div>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-950 font-medium">
+          <b>Lệnh đóng gói thành file .exe chạy độc lập cho máy tính Viện kiểm sát nhân dân:</b>
+          <code class="block mt-1 bg-white px-3 py-2 rounded-lg border border-amber-300 font-mono text-[11px] text-slate-900 font-bold">
+            pyinstaller --noconsole --onefile --name "NTQLAHS_VKSND_TPHCM" Phan_Mem_Chuan_Hoa_QLAHS_Desktop.py
+          </code>
+        </div>
+
+        <pre id="pythonCodeBlock" class="bg-slate-900 text-slate-100 p-4 rounded-xl text-[11px] font-mono overflow-x-auto max-h-96 leading-relaxed"></pre>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="bg-slate-900 text-slate-400 py-3.5 border-t border-slate-800 text-center text-xs">
+    <div class="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
+      <span class="font-bold text-slate-300">VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH &bull; HỆ THỐNG TỔNG HỢP VÀ XỬ LÝ DỮ LIỆU NTQLAHS</span>
+      <span class="text-amber-400 font-bold">Bảo mật thông tin: Xử lý 100% Offline trên máy nội bộ cơ quan</span>
+    </div>
+  </footer>
+
+  <script>
+    // =========================================================================
+    // 1. DANH MỤC 63 TỈNH / THÀNH PHỐ VÀ CƠ QUAN TRUNG ƯƠNG
+    // =========================================================================
+    const PROVINCE_MAP = [
+      // 5 Thành phố trực thuộc Trung ương
+      { name: "TP. Hồ Chí Minh", patterns: ["hồ chí minh", "ho chi minh", "tphcm", "tp.hcm", "tp hcm", "sài gòn", "thủ đức", "quận 1", "quận 3", "quận 4", "quận 5", "quận 6", "quận 7", "quận 8", "quận 10", "quận 11", "quận 12", "bình thạnh", "gò vấp", "tân bình", "tân phú", "phú nhuận", "bình tân", "củ chi", "hóc môn", "bình chánh", "nhà bè", "cần giờ"] },
+      { name: "Hà Nội", patterns: ["hà nội", "ha noi", "thủ đô hà nội", "hn", "ba đình", "hoàn kiếm", "đống đa", "hai bà trưng", "cầu giấy", "thanh xuân", "hoàng mai", "long biên", "nam từ liêm", "bắc từ liêm", "tây hồ", "hà đông", "sơn tây", "ba vì", "đông anh", "gia lâm", "sóc sơn", "thanh trì"] },
+      { name: "Hải Phòng", patterns: ["hải phòng", "hai phong", "hp", "ngô quyền", "hồng bàng", "lê chân", "hải an", "kiến an", "đồ sơn", "thủy nguyên", "cát hải"] },
+      { name: "Đà Nẵng", patterns: ["đà nẵng", "da nang", "hải châu", "thanh khê", "sơn trà", "ngũ hành sơn", "liên chiểu", "cẩm lệ", "hòa vang"] },
+      { name: "Cần Thơ", patterns: ["cần thơ", "can tho", "ninh kiều", "bình thủy", "cái răng", "ô môn", "thốt nốt"] },
+
+      // Miền Bắc
+      { name: "Bắc Giang", patterns: ["bắc giang", "bac giang", "việt yên", "hiệp hòa", "lục ngạn"] },
+      { name: "Bắc Kạn", patterns: ["bắc kạn", "bắc cạn", "bac kan", "bac can"] },
+      { name: "Bắc Ninh", patterns: ["bắc ninh", "bac ninh", "từ sơn", "thuận thành", "quế võ", "yên phong"] },
+      { name: "Cao Bằng", patterns: ["cao bằng", "cao bang"] },
+      { name: "Điện Biên", patterns: ["điện biên", "dien bien", "mường lay", "tuần giáo"] },
+      { name: "Hà Giang", patterns: ["hà giang", "ha giang", "đồng văn", "mèo vạc", "vị xuyên"] },
+      { name: "Hà Nam", patterns: ["hà nam", "ha nam", "phủ lý", "duy tiên"] },
+      { name: "Hải Dương", patterns: ["hải dương", "hai duong", "chí linh", "kinh môn"] },
+      { name: "Hòa Bình", patterns: ["hòa bình", "hoa binh", "lương sơn", "mai châu"] },
+      { name: "Hưng Yên", patterns: ["hưng yên", "hung yen", "mỹ hào", "khoái châu", "văn giang"] },
+      { name: "Lai Châu", patterns: ["lai châu", "lai chau", "mường tè"] },
+      { name: "Lạng Sơn", patterns: ["lạng sơn", "lang son", "hữu lũng", "chi lăng", "đình lập"] },
+      { name: "Lào Cai", patterns: ["lào cai", "lao cai", "sa pa", "bát xát"] },
+      { name: "Nam Định", patterns: ["nam định", "nam dinh", "giao thủy", "hải hậu"] },
+      { name: "Ninh Bình", patterns: ["ninh bình", "ninh binh", "tam điệp", "hoa lư"] },
+      { name: "Phú Thọ", patterns: ["phú thọ", "phu tho", "việt trì", "lâm thao"] },
+      { name: "Quảng Ninh", patterns: ["quảng ninh", "quang ninh", "hạ long", "cẩm phả", "uông bí", "móng cái", "vân đồn"] },
+      { name: "Sơn La", patterns: ["sơn la", "son la", "mộc châu"] },
+      { name: "Thái Bình", patterns: ["thái bình", "thai binh", "tiền hải"] },
+      { name: "Thái Nguyên", patterns: ["thái nguyên", "thai nguyen", "sông công", "phổ yên"] },
+      { name: "Tuyên Quang", patterns: ["tuyên quang", "tuyen quang"] },
+      { name: "Vĩnh Phúc", patterns: ["vĩnh phúc", "vinh phuc", "vĩnh yên", "phúc yên"] },
+      { name: "Yên Bái", patterns: ["yên bái", "yen bai", "nghĩa lộ", "mù cang chải"] },
+
+      // Miền Trung & Tây Nguyên
+      { name: "Hà Tĩnh", patterns: ["hà tĩnh", "ha tinh", "hồng lĩnh", "kỳ anh", "hương sơn", "cẩm xuyên", "nghi xuân", "đức thọ", "hương khê", "thạch hà", "can lộc"] },
+      { name: "Nghệ An", patterns: ["nghệ an", "nghe an", "vinh", "thái hòa", "cửa lò", "diễn châu", "quỳnh lưu", "đô lương", "nam đàn"] },
+      { name: "Thanh Hóa", patterns: ["thanh hóa", "thanh hoa", "sầm sơn", "bỉm sơn", "nghi sơn"] },
+      { name: "Quảng Bình", patterns: ["quảng bình", "quang binh", "đồng hới", "ba đồn"] },
+      { name: "Quảng Trị", patterns: ["quảng trị", "quang tri", "đông hà"] },
+      { name: "Thừa Thiên Huế", patterns: ["thừa thiên huế", "thừa thiên - huế", "thừa thiên", "thua thien hue", "huế"] },
+      { name: "Quảng Nam", patterns: ["quảng nam", "quang nam", "tam kỳ", "hội an", "điện bàn"] },
+      { name: "Quảng Ngãi", patterns: ["quảng ngãi", "quang ngai", "lý sơn"] },
+      { name: "Bình Định", patterns: ["bình định", "binh dinh", "quy nhơn", "an nhơn", "hoài nhơn"] },
+      { name: "Phú Yên", patterns: ["phú yên", "phu yen", "tuy hòa", "sông cầu"] },
+      { name: "Khánh Hòa", patterns: ["khánh hòa", "khanh hoa", "nha trang", "cam ranh", "ninh hòa"] },
+      { name: "Ninh Thuận", patterns: ["ninh thuận", "ninh thuan", "phan rang"] },
+      { name: "Bình Thuận", patterns: ["bình thuận", "binh thuan", "phan thiết", "la gi"] },
+      { name: "Kon Tum", patterns: ["kon tum", "kontum"] },
+      { name: "Gia Lai", patterns: ["gia lai", "pleiku", "an khê", "ayar pa"] },
+      { name: "Đắk Lắk", patterns: ["đắk lắk", "đắc lắc", "đăk lăk", "dak lak", "daklak", "buôn ma thuột", "krông pắc", "krông ana", "ea kar"] },
+      { name: "Đắk Nông", patterns: ["đắk nông", "đắc nông", "đăk nông", "dak nong", "gia nghĩa"] },
+      { name: "Lâm Đồng", patterns: ["lâm đồng", "lam dong", "đà lạt", "bảo lộc", "đức trọng"] },
+
+      // Miền Nam
+      { name: "Bình Dương", patterns: ["bình dương", "binh duong", "thủ dầu một", "dĩ an", "thuận an", "bến cát", "tân uyên"] },
+      { name: "Bình Phước", patterns: ["bình phước", "binh phuoc", "đồng xoài", "bình long", "phước long"] },
+      { name: "Đồng Nai", patterns: ["đồng nai", "dong nai", "biên hòa", "long khánh", "long thành", "nhơn trạch"] },
+      { name: "Tây Ninh", patterns: ["tây ninh", "tay ninh", "trảng bàng", "hòa thành"] },
+      { name: "Bà Rịa - Vũng Tàu", patterns: ["bà rịa", "vũng tàu", "ba ria", "vung tau", "brvt", "br-vt", "phú mỹ"] },
+      { name: "Long An", patterns: ["long an", "tân an", "bến lức", "cần giuộc", "đức hòa"] },
+      { name: "Tiền Giang", patterns: ["tiền giang", "tien giang", "mỹ tho", "gò công", "cai lậy"] },
+      { name: "Bến Tre", patterns: ["bến tre", "ben tre"] },
+      { name: "Trà Vinh", patterns: ["trà vinh", "tra vinh"] },
+      { name: "Vĩnh Long", patterns: ["vĩnh long", "vinh long", "bình minh"] },
+      { name: "Đồng Tháp", patterns: ["đồng tháp", "dong thap", "cao lãnh", "sa đéc", "hồng ngự"] },
+      { name: "An Giang", patterns: ["an giang", "long xuyên", "châu đốc", "tân châu", "tịnh biên"] },
+      { name: "Kiên Giang", patterns: ["kiên giang", "kien giang", "rạch giá", "hà tiên", "phú quốc"] },
+      { name: "Hậu Giang", patterns: ["hậu giang", "hau giang", "vị thanh", "ngã bảy"] },
+      { name: "Sóc Trăng", patterns: ["sóc trăng", "soc trang"] },
+      { name: "Bạc Liêu", patterns: ["bạc liêu", "bac lieu", "giá rai"] },
+      { name: "Cà Mau", patterns: ["cà mau", "ca mau", "năm căn"] },
+
+      // Cơ quan Trung ương
+      { name: "Bộ Công an", patterns: ["bộ công an", "cục c01", "cục c02", "cục c03", "cục c04", "cục c05", "cục a09", "cục cảnh sát điều tra", "cơ quan an ninh điều tra bộ công an", "bca"] },
+      { name: "VKSND tối cao", patterns: ["vksnd tối cao", "vksndtc", "viện kiểm sát nhân dân tối cao", "cơ quan điều tra vksnd"] }
+    ];
+
+    // Tiền biên dịch biểu thức chính quy 63 Tỉnh/Thành tăng tốc độ x100 lần
+    const COMPILED_PROVINCE_MAP = PROVINCE_MAP.map(item => {
+      const parts = item.patterns.map(p => "(?:\\b|[\\s,.\\-_/])" + p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:\\b|[\\s,.\\-_/]|$)");
+      return {
+        name: item.name,
+        regex: new RegExp(parts.join("|"), "i")
+      };
+    });
+
+    function detectProvince(cqdtText, fallbackText = "") {
+      if (!cqdtText && !fallbackText) return "Chưa xác định";
+      const target = (String(cqdtText || "") + " " + String(fallbackText || "")).toLowerCase();
+
+      for (let i = 0; i < COMPILED_PROVINCE_MAP.length; i++) {
+        if (COMPILED_PROVINCE_MAP[i].regex.test(target)) {
+          return COMPILED_PROVINCE_MAP[i].name;
+        }
+      }
+
+      const m = target.match(/(?:tỉnh|thành\s*phố|tp\.?|tx\.?)\s+([a-zà-ỹ\s]+?)(?:,|-|\.|$)/i);
+      if (m && m[1]) {
+        let cand = m[1].trim();
+        if (cand.length >= 2 && !["công an", "cảnh sát", "điều tra", "hồ sơ"].includes(cand.toLowerCase())) {
+          return cand.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        }
+      }
+
+      return "Khác / Chưa rõ";
+    }
+
+    // =========================================================================
+    // QUẢN LÝ LOADING MODAL & TIẾN TRÌNH XỬ LÝ DỮ LIỆU NẶNG
+    // =========================================================================
+    function showLoading(title = "Đang xử lý dữ liệu hồ sơ QLAHS...", detail = "Hệ thống đang chuẩn hóa và tính toán...") {
+      const modal = document.getElementById("appLoadingModal");
+      if (!modal) return;
+      const titleEl = document.getElementById("appLoadingTitle");
+      const detailEl = document.getElementById("appLoadingDetail");
+      if (titleEl) titleEl.textContent = title;
+      if (detailEl) detailEl.textContent = detail;
+      modal.classList.remove("hidden");
+    }
+
+    function updateLoadingDetail(detail) {
+      const detailEl = document.getElementById("appLoadingDetail");
+      if (detailEl) detailEl.textContent = detail;
+    }
+
+    function hideLoading() {
+      const modal = document.getElementById("appLoadingModal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    async function runWithLoading(title, detail, taskFn) {
+      showLoading(title, detail);
+      // Nhường luồng cho trình duyệt render popup loading trước khi chạy tính toán nặng
+      await new Promise(r => setTimeout(r, 60));
+      try {
+        const res = await taskFn();
+        return res;
+      } catch (err) {
+        showToast("Lỗi xử lý: " + err.message, true);
+        throw err;
+      } finally {
+        hideLoading();
+      }
+    }
+
+    // Dữ liệu mẫu ban đầu
+    const INITIAL_RAW_ROWS = [
+      ["STT", "Thông tin hồ sơ", "Họ tên", "Tội danh", "Trạng thái hồ sơ"],
+      ["", "Giai đoạn: Điều tra", "010214.082002.104.00425", "", ""],
+      ["", "VA 010214.072002.104.01616", "Trần Thanh Hoàng", "", ""],
+      ["1", "Trần Thanh Hoàng cố ý gây thương tích cho Nguyễn Văn Chìm", "Ngày sinh: 31/12/1967", "Điều 104 - Tội cố ý gây thương tích hoặc gây tổn hại cho sức khoẻ của người khác", "Đình nã"],
+      ["", "Công an Thành phố Hồ Chí Minh", "", "", ""],
+      ["", "Giai đoạn: Sơ thẩm", "VA_E01.59.010_2606_0090_001", "", ""],
+      ["", "VA_E01.59.010_2606_0090", "Nguyễn Ngọc Lài", "", ""],
+      ["2", "Nguyễn Ngọc Lài. Đ138", "Ngày sinh: 20/12/1985", "Điều 138 - Tội trộm cắp tài sản", "Đình nã"],
+      ["", "Công an tỉnh Hà Tĩnh", "CCCD: 000000000003", "", ""]
+    ];
+
+    const CQDT_PREFIXES = [
+      "công an", "cơ quan", "cqcsđt", "cqđt", "cục điều tra",
+      "viện kiểm sát", "bộ tư lệnh", "chi cục", "đồn biên phòng", "hải quan", "kiểm lâm"
+    ];
+
+    let appState = {
+      records: [],
+      dataMode: "DEFENDANT", // "DEFENDANT" (12 cột) hoặc "CASE" (26 cột chuẩn)
+      searchQuery: "",
+      provinceFilter: "ALL",
+      stageFilter: "ALL",
+      statusFilter: "ALL",
+      urgencyFilter: "ALL",
+      shortLaw: false,
+      pivotRowField: "tinhThanh",
+      pivotColField: "giaiDoan",
+      pivotValueField: "defendants",
+      pivotFullReport: false
+    };
+
+    function detectDataFormat(rawRows) {
+      if (!rawRows || rawRows.length === 0) return "DEFENDANT";
+      const sample = rawRows.slice(0, 25).map(r => (Array.isArray(r) ? r.slice(0, 8).join(" ") : String(r))).join(" ").toLowerCase();
+      if (
+        sample.includes("thông tin vụ án") ||
+        sample.includes("thông tin thụ lý") ||
+        sample.includes("số thụ lý:") ||
+        sample.includes("số qđ khởi tố:") ||
+        sample.includes("thời hiệu") ||
+        sample.includes("cán bộ thụ lý:") ||
+        sample.includes("loại tội")
+      ) {
+        return "CASE";
+      }
+      return "DEFENDANT";
+    }
+
+    function parseQLAHSCaseRows(rawRows) {
+      const blocks = [];
+      let current = [];
+
+      for (const row of rawRows) {
+        if (!row || !Array.isArray(row)) continue;
+        const c0 = String(row[0] || "").trim();
+        const c1 = String(row[1] || "").trim();
+
+        if (c0.toLowerCase() === "stt" || c1.toLowerCase().includes("thông tin vụ án")) {
+          continue;
+        }
+
+        if (/^\d+$/.test(c0)) {
+          if (current.length > 0) blocks.push(current);
+          current = [];
+        }
+
+        if (row.some(v => v !== null && v !== undefined && String(v).trim() !== "")) {
+          current.push(row);
+        }
+      }
+      if (current.length > 0) blocks.push(current);
+
+      const results = [];
+      blocks.forEach((blk, idx) => {
+        const rec = {
+          id: "case_" + (idx + 1) + "_" + Math.random().toString(36).substring(2, 9),
+          stt: idx + 1,
+          maVuAn: "",
+          tenVuAn: "",
+          soQdKhoiTo: "",
+          ngayQdKhoiTo: "",
+          donViKhoiTo: "",
+          tinhThanh: "",
+          ngayTiepNhan: "",
+          thoiHanGiaiQuyet: "",
+          ngayHetThoiHieu: "",
+          canhBaoThoiHieu: "",
+          soThuLy: "",
+          ngayThuLy: "",
+          loaiThuLy: "",
+          vksThuLy: "",
+          biCanDauVu: "",
+          tongBiCan: "",
+          dieuLuat: "",
+          loaiToi: "",
+          canBoThuLy: "",
+          canBoGiaiQuyet: "",
+          giaiDoan: "",
+          trangThaiVuAn: "",
+          trangThaiBieuMau: ""
+        };
+
+        const tenLines = [];
+
+        blk.forEach((row, rIdx) => {
+          const vVa = String(row[1] || "").trim().replace(/\u00a0/g, " ");
+          const vTl = String(row[2] || "").trim().replace(/\u00a0/g, " ");
+          const vBc = String(row[3] || "").trim().replace(/\u00a0/g, " ");
+          const vTd = String(row[4] || "").trim().replace(/\u00a0/g, " ");
+          const vLt = String(row[5] || "").trim().replace(/\u00a0/g, " ");
+          const vCb = String(row[6] || "").trim().replace(/\u00a0/g, " ");
+          const vTt = String(row[7] || "").trim().replace(/\u00a0/g, " ");
+          const vBm = String(row[8] || "").trim().replace(/\u00a0/g, " ");
+
+          if (rIdx === 0 && vVa.startsWith("VA_")) {
+            rec.maVuAn = vVa;
+          } else if (vVa) {
+            const vLow = vVa.toLowerCase();
+            if (vLow.startsWith("số qđ khởi tố:")) {
+              rec.soQdKhoiTo = vVa.split(":", 2)[1] ? vVa.split(":", 2)[1].trim() : "";
+            } else if (vLow.startsWith("ngày ra qđ khởi tố:")) {
+              rec.ngayQdKhoiTo = vVa.split(":", 2)[1] ? vVa.split(":", 2)[1].trim() : "";
+            } else if (vLow.startsWith("đơn vị ra qđ khởi tố:")) {
+              rec.donViKhoiTo = vVa.split(":", 2)[1] ? vVa.split(":", 2)[1].trim() : "";
+            } else if (vLow.startsWith("ngày tiếp nhận hồ sơ:")) {
+              rec.ngayTiepNhan = vVa.split(":", 2)[1] ? vVa.split(":", 2)[1].trim() : "";
+            } else if (vLow.startsWith("thời hạn giải quyết:")) {
+              rec.thoiHanGiaiQuyet = vVa.split(":", 2)[1] ? vVa.split(":", 2)[1].trim() : "";
+            } else if (vLow.startsWith("ngày hết thời hiệu")) {
+              rec.ngayHetThoiHieu = vVa.split(":", 2)[1] ? vVa.split(":", 2)[1].trim() : "";
+            } else if (vLow.includes("thời hiệu")) {
+              rec.canhBaoThoiHieu = vVa;
+            } else {
+              tenLines.push(vVa);
+            }
+          }
+
+          if (vTl) {
+            const vTlLow = vTl.toLowerCase();
+            if (vTlLow.startsWith("số thụ lý:")) {
+              rec.soThuLy = vTl.split(":", 2)[1] ? vTl.split(":", 2)[1].trim() : "";
+            } else if (vTlLow.startsWith("ngày thụ lý:")) {
+              rec.ngayThuLy = vTl.split(":", 2)[1] ? vTl.split(":", 2)[1].trim() : "";
+            } else if (vTlLow.startsWith("loại thụ lý:")) {
+              rec.loaiThuLy = vTl.split(":", 2)[1] ? vTl.split(":", 2)[1].trim() : "";
+            } else if (vTlLow.startsWith("đơn vị vks thụ lý:")) {
+              rec.vksThuLy = vTl.split(":", 2)[1] ? vTl.split(":", 2)[1].trim() : "";
+            }
+          }
+
+          if (vBc) {
+            const vBcLow = vBc.toLowerCase();
+            if (vBcLow.startsWith("bị can đầu vụ:")) {
+              rec.biCanDauVu = vBc.split(":", 2)[1] ? vBc.split(":", 2)[1].trim() : "";
+            } else if (vBcLow.startsWith("tổng bị can khởi tố:")) {
+              rec.tongBiCan = vBc.split(":", 2)[1] ? vBc.split(":", 2)[1].trim() : "";
+            } else if (!rec.biCanDauVu) {
+              rec.biCanDauVu = vBc;
+            }
+          }
+
+          if (vTd) {
+            if (rec.dieuLuat) rec.dieuLuat += " | " + vTd;
+            else rec.dieuLuat = vTd;
+          }
+
+          if (vLt && !rec.loaiToi) {
+            rec.loaiToi = vLt;
+          }
+
+          if (vCb) {
+            const vCbLow = vCb.toLowerCase();
+            if (vCbLow.startsWith("cán bộ thụ lý:")) {
+              rec.canBoThuLy = vCb.split(":", 2)[1] ? vCb.split(":", 2)[1].trim() : "";
+            } else if (vCbLow.startsWith("cán bộ giải quyết:")) {
+              rec.canBoGiaiQuyet = vCb.split(":", 2)[1] ? vCb.split(":", 2)[1].trim() : "";
+            } else {
+              rec.canBoGiaiQuyet = rec.canBoGiaiQuyet ? rec.canBoGiaiQuyet + "; " + vCb : vCb;
+            }
+          }
+
+          if (vTt) {
+            if (vTt.includes(":")) {
+              const parts = vTt.split(":");
+              rec.giaiDoan = parts[0].trim();
+              rec.trangThaiVuAn = parts.slice(1).join(":").trim();
+            } else {
+              rec.trangThaiVuAn = vTt;
+            }
+          }
+
+          if (vBm) {
+            rec.trangThaiBieuMau = rec.trangThaiBieuMau ? rec.trangThaiBieuMau + "; " + vBm : vBm;
+          }
+        });
+
+        rec.tenVuAn = tenLines.join(" - ");
+        let prov = detectProvince(rec.donViKhoiTo, rec.vksThuLy + " " + rec.tenVuAn);
+        if ((prov === "Khác / Chưa rõ" || prov === "Chưa xác định") &&
+            ((rec.vksThuLy + " " + rec.tenVuAn).toLowerCase().includes("hồ chí minh") ||
+             rec.donViKhoiTo.toLowerCase().includes("hải quan"))) {
+          prov = "TP. Hồ Chí Minh";
+        }
+        rec.tinhThanh = prov;
+
+        // Tính toán số ngày còn lại và mức độ khẩn cấp theo ngày tháng thực tế
+        let dHetHan = null;
+        if (rec.ngayHetThoiHieu) {
+          const parts = rec.ngayHetThoiHieu.split("/");
+          if (parts.length === 3) {
+            dHetHan = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+          }
+        }
+        if (dHetHan && !isNaN(dHetHan.getTime())) {
+          // Tính theo ngày chuẩn hệ thống
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const diffDays = Math.round((dHetHan.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays < 0) {
+            rec.soNgayConLai = `Đã quá ${-diffDays} ngày`;
+            rec.mucDoKhanCap = `⚠️ Đã quá hạn (${-diffDays} ngày)`;
+          } else if (diffDays <= 7) {
+            rec.soNgayConLai = `Còn ${diffDays} ngày`;
+            rec.mucDoKhanCap = `🔴 Khẩn cấp (Còn ${diffDays} ngày)`;
+          } else if (diffDays <= 15) {
+            rec.soNgayConLai = `Còn ${diffDays} ngày`;
+            rec.mucDoKhanCap = `🟠 Rất gấp (Còn ${diffDays} ngày)`;
+          } else if (diffDays <= 30) {
+            rec.soNgayConLai = `Còn ${diffDays} ngày`;
+            rec.mucDoKhanCap = `🟡 Sắp hết hạn (Còn ${diffDays} ngày)`;
+          } else {
+            rec.soNgayConLai = `Còn ${diffDays} ngày`;
+            rec.mucDoKhanCap = `🟢 Bình thường (Còn ${diffDays} ngày)`;
+          }
+        } else {
+          rec.soNgayConLai = "";
+          rec.mucDoKhanCap = "Chưa rõ thời hiệu";
+        }
+
+        results.push(rec);
+      });
+
+      return results;
+    }
+
+    function showToast(message, isError = false) {
+      const box = document.getElementById("toastBox");
+      const icon = document.getElementById("toastIcon");
+      const txt = document.getElementById("toastText");
+      txt.textContent = message;
+      icon.className = "w-3.5 h-3.5 rounded-full shrink-0 " + (isError ? "bg-rose-500" : "bg-emerald-400");
+      box.classList.remove("hidden");
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        box.classList.add("hidden");
+      }, 3600);
+    }
+
+    function splitCleanLines(arr) {
+      const out = [];
+      for (const item of arr) {
+        if (item === null || item === undefined) continue;
+        let raw = String(item).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        if (raw.startsWith('="') && raw.endsWith('"')) {
+          raw = raw.slice(2, -1);
+        }
+        for (const sub of raw.split("\n")) {
+          const s = sub.trim();
+          if (s) out.push(s);
+        }
+      }
+      return out;
+    }
+
+    function parseQLAHSRows(rawRows) {
+      const blocks = [];
+      let currentBlock = null;
+
+      for (const row of rawRows) {
+        if (!Array.isArray(row)) continue;
+        const texts = [0, 1, 2, 3, 4].map(i => {
+          let v = row[i];
+          if (v === null || v === undefined) return "";
+          let s = String(v).trim();
+          if (s.startsWith('="') && s.endsWith('"')) s = s.slice(2, -1).trim();
+          return s;
+        });
+
+        if (texts.every(t => t === "")) continue;
+
+        const c0Low = texts[0].toLowerCase();
+        const c1Low = texts[1].toLowerCase();
+        const c2Low = texts[2].toLowerCase();
+        if (c0Low === "stt" || c1Low.includes("thông tin hồ sơ") || (c1Low === "" && c2Low === "họ tên")) {
+          continue;
+        }
+
+        const bLines = texts[1].replace(/\r\n/g, "\n").split("\n").map(x => x.trim()).filter(Boolean);
+        const startsNewBlock = bLines.some(ln => /^giai\s*đoạn\s*:/i.test(ln));
+
+        if (startsNewBlock) {
+          if (currentBlock) blocks.push(currentBlock);
+          currentBlock = { A: [], B: [], C: [], D: [], E: [] };
+        }
+        if (!currentBlock) {
+          currentBlock = { A: [], B: [], C: [], D: [], E: [] };
+        }
+
+        if (texts[0]) currentBlock.A.push(texts[0]);
+        if (texts[1]) currentBlock.B.push(texts[1]);
+        if (texts[2]) currentBlock.C.push(texts[2]);
+        if (texts[3]) currentBlock.D.push(texts[3]);
+        if (texts[4]) currentBlock.E.push(texts[4]);
+      }
+
+      if (currentBlock && (currentBlock.A.length || currentBlock.B.length || currentBlock.C.length)) {
+        blocks.push(currentBlock);
+      }
+
+      const results = [];
+      blocks.forEach((blk, idx) => {
+        const aLines = splitCleanLines(blk.A);
+        const bLines = splitCleanLines(blk.B);
+        const cLines = splitCleanLines(blk.C);
+        const dLines = splitCleanLines(blk.D);
+        const eLines = splitCleanLines(blk.E);
+
+        // 1. STT
+        let sttVal = idx + 1;
+        for (const a of aLines) {
+          if (/^\d+$/.test(a)) {
+            sttVal = parseInt(a, 10);
+            break;
+          }
+        }
+
+        // 2. Cột B: Giai đoạn, Mã vụ án, Tên vụ án, Cơ quan CSĐT
+        let giaiDoan = "";
+        const bRem = [];
+        for (const ln of bLines) {
+          const mGd = ln.match(/^giai\s*đoạn\s*:\s*(.*)$/i);
+          if (mGd && !giaiDoan) {
+            giaiDoan = mGd[1].trim();
+          } else {
+            bRem.push(ln);
+          }
+        }
+
+        let maVuAn = "";
+        let tenVuAn = "";
+        let cqdt = "";
+        if (bRem.length >= 3) {
+          maVuAn = bRem[0];
+          cqdt = bRem[bRem.length - 1];
+          tenVuAn = bRem.slice(1, bRem.length - 1).join(" - ");
+        } else if (bRem.length === 2) {
+          maVuAn = bRem[0];
+          const secondLow = bRem[1].toLowerCase();
+          if (CQDT_PREFIXES.some(p => secondLow.startsWith(p))) {
+            cqdt = bRem[1];
+          } else {
+            tenVuAn = bRem[1];
+          }
+        } else if (bRem.length === 1) {
+          maVuAn = bRem[0];
+        }
+
+        // Nhận dạng Tỉnh/Thành từ CQĐT
+        const tinhThanh = detectProvince(cqdt, tenVuAn);
+
+        // 3. Cột C: Mã bị can, Tên bị can, Ngày sinh, Số CCCD
+        const subDefendants = [];
+        let curDef = { rem: [], ngaySinh: "", soCccd: "" };
+
+        for (const ln of cLines) {
+          const mNs = ln.match(/^(?:ngày\s*sinh|năm\s*sinh|ns)\s*:\s*(.*)$/i);
+          const mCccd = ln.match(/^(?:cccd|số\s*cccd|cmnd|số\s*cmnd|đdcn|căn\s*cước[^:]*)\s*:\s*(.*)$/i);
+          if (mNs) {
+            curDef.ngaySinh = mNs[1].trim();
+          } else if (mCccd) {
+            curDef.soCccd = mCccd[1].trim();
+          } else {
+            if (curDef.rem.length >= 2 && (curDef.ngaySinh || curDef.soCccd)) {
+              subDefendants.push(curDef);
+              curDef = { rem: [ln], ngaySinh: "", soCccd: "" };
+            } else {
+              curDef.rem.push(ln);
+            }
+          }
+        }
+        if (curDef.rem.length > 0 || curDef.ngaySinh || curDef.soCccd) {
+          subDefendants.push(curDef);
+        }
+        if (subDefendants.length === 0) {
+          subDefendants.push({ rem: [], ngaySinh: "", soCccd: "" });
+        }
+
+        const dieuLuatFull = Array.from(new Set(dLines)).join("; ");
+        const trangThai = Array.from(new Set(eLines)).join("; ");
+
+        subDefendants.forEach((defItem) => {
+          let maBiCan = "";
+          let tenBiCan = "";
+          if (defItem.rem.length >= 2) {
+            maBiCan = defItem.rem[0];
+            tenBiCan = defItem.rem.slice(1).join(" ");
+          } else if (defItem.rem.length === 1) {
+            if (/\d/.test(defItem.rem[0])) {
+              maBiCan = defItem.rem[0];
+            } else {
+              tenBiCan = defItem.rem[0];
+            }
+          }
+
+          results.push({
+            id: "rec_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+            stt: sttVal,
+            maVuAn: maVuAn,
+            tenVuAn: tenVuAn,
+            cqdt: cqdt,
+            tinhThanh: tinhThanh,
+            giaiDoan: giaiDoan,
+            maBiCan: maBiCan,
+            tenBiCan: tenBiCan,
+            ngaySinh: defItem.ngaySinh,
+            soCccd: defItem.soCccd,
+            dieuLuat: dieuLuatFull,
+            trangThai: trangThai
+          });
+        });
+      });
+
+      results.forEach((r, i) => {
+        if (!r.stt) r.stt = i + 1;
+      });
+      return results;
+    }
+
+    function formatLawDisplay(lawStr) {
+      if (!appState.shortLaw || !lawStr) return lawStr;
+      const m = lawStr.match(/(Điều\s+\d+[a-zA-Z0-9]*)/i);
+      return m ? m[1] : lawStr;
+    }
+
+    // Đọc & Ghi XLSX Offline Multi-Sheet
+    async function inflateRawBuffer(compressedBytes) {
+      if (typeof DecompressionStream === "undefined") {
+        throw new Error("Trình duyệt không hỗ trợ DecompressionStream.");
+      }
+      const ds = new DecompressionStream("deflate-raw");
+      const writer = ds.writable.getWriter();
+      writer.write(compressedBytes);
+      writer.close();
+      const reader = ds.readable.getReader();
+      const chunks = [];
+      let total = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        total += value.byteLength;
+      }
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const c of chunks) {
+        out.set(c, offset);
+        offset += c.byteLength;
+      }
+      return out;
+    }
+
+    async function unzipXlsxEntries(arrayBuffer) {
+      const view = new DataView(arrayBuffer);
+      const bytes = new Uint8Array(arrayBuffer);
+      const files = {};
+
+      let eocdPos = -1;
+      for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+        if (view.getUint32(i, true) === 0x06054b50) {
+          eocdPos = i;
+          break;
+        }
+      }
+      if (eocdPos === -1) throw new Error("File không đúng định dạng ZIP/XLSX.");
+
+      const totalEntries = view.getUint16(eocdPos + 10, true);
+      let cdOffset = view.getUint32(eocdPos + 16, true);
+      const decoder = new TextDecoder("utf-8");
+
+      for (let idx = 0; idx < totalEntries; idx++) {
+        if (view.getUint32(cdOffset, true) !== 0x02014b50) break;
+        const method = view.getUint16(cdOffset + 10, true);
+        const compSize = view.getUint32(cdOffset + 20, true);
+        const nameLen = view.getUint16(cdOffset + 28, true);
+        const extraLen = view.getUint16(cdOffset + 30, true);
+        const commentLen = view.getUint16(cdOffset + 32, true);
+        const localHeaderOffset = view.getUint32(cdOffset + 42, true);
+
+        const name = decoder.decode(bytes.subarray(cdOffset + 46, cdOffset + 46 + nameLen));
+        cdOffset += 46 + nameLen + extraLen + commentLen;
+
+        const locNameLen = view.getUint16(localHeaderOffset + 26, true);
+        const locExtraLen = view.getUint16(localHeaderOffset + 28, true);
+        const dataOffset = localHeaderOffset + 30 + locNameLen + locExtraLen;
+        const compData = bytes.subarray(dataOffset, dataOffset + compSize);
+
+        if (method === 0) {
+          files[name] = compData;
+        } else if (method === 8) {
+          try {
+            files[name] = await inflateRawBuffer(compData);
+          } catch (e) {
+            // bỏ qua
+          }
+        }
+      }
+      return files;
+    }
+
+    async function readXlsxToRowsOffline(arrayBuffer) {
+      const files = await unzipXlsxEntries(arrayBuffer);
+      const decoder = new TextDecoder("utf-8");
+
+      let sharedStrings = [];
+      const ssKey = Object.keys(files).find(k => k.toLowerCase().endsWith("sharedstrings.xml"));
+      if (ssKey && files[ssKey]) {
+        const ssXml = decoder.decode(files[ssKey]);
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(ssXml, "application/xml");
+        const siList = doc.getElementsByTagName("si");
+        for (let i = 0; i < siList.length; i++) {
+          const tTags = siList[i].getElementsByTagName("t");
+          let strVal = "";
+          for (let j = 0; j < tTags.length; j++) strVal += tTags[j].textContent;
+          sharedStrings.push(strVal);
+        }
+      }
+
+      const sheetKey = Object.keys(files).find(k => k.toLowerCase().includes("sheet1.xml")) ||
+                       Object.keys(files).find(k => k.toLowerCase().includes("sheet"));
+      if (!sheetKey || !files[sheetKey]) {
+        throw new Error("Không tìm thấy worksheet trong file Excel.");
+      }
+
+      const sheetXml = decoder.decode(files[sheetKey]);
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(sheetXml, "application/xml");
+
+      function colLetterToIndex(colStr) {
+        let n = 0;
+        for (let i = 0; i < colStr.length; i++) {
+          n = n * 26 + (colStr.charCodeAt(i) - 64);
+        }
+        return n - 1;
+      }
+
+      const rowNodes = doc.getElementsByTagName("row");
+      const grid = [];
+
+      for (let r = 0; r < rowNodes.length; r++) {
+        const rowNode = rowNodes[r];
+        const rIndexAttr = parseInt(rowNode.getAttribute("r") || (r + 1), 10) - 1;
+        while (grid.length <= rIndexAttr) grid.push([]);
+        const rowCells = grid[rIndexAttr];
+
+        const cNodes = rowNode.getElementsByTagName("c");
+        for (let c = 0; c < cNodes.length; c++) {
+          const cNode = cNodes[c];
+          const ref = cNode.getAttribute("r") || "";
+          const tType = cNode.getAttribute("t") || "";
+          const m = ref.match(/^([A-Z]+)(\d+)$/);
+          if (!m) continue;
+          const colIdx = colLetterToIndex(m[1]);
+
+          let cellVal = "";
+          const vTag = cNode.getElementsByTagName("v")[0];
+          const isTag = cNode.getElementsByTagName("is")[0];
+
+          if (tType === "s" && vTag) {
+            const idxVal = parseInt(vTag.textContent, 10);
+            cellVal = sharedStrings[idxVal] || "";
+          } else if (tType === "inlineStr" && isTag) {
+            const tTag = isTag.getElementsByTagName("t")[0];
+            cellVal = tTag ? tTag.textContent : "";
+          } else if (vTag) {
+            cellVal = vTag.textContent;
+          }
+          while (rowCells.length <= colIdx) rowCells.push("");
+          rowCells[colIdx] = cellVal;
+        }
+      }
+      return grid;
+    }
+
+    const CRC_TABLE = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      CRC_TABLE[i] = c;
+    }
+    function calcCrc32(bytes) {
+      let crc = 0xffffffff;
+      for (let i = 0; i < bytes.length; i++) {
+        crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xff];
+      }
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    function buildStoreZip(fileEntries) {
+      const encoder = new TextEncoder();
+      const localParts = [];
+      const centralParts = [];
+      let offset = 0;
+
+      for (const entry of fileEntries) {
+        const nameBytes = encoder.encode(entry.name);
+        const dataBytes = typeof entry.content === "string" ? encoder.encode(entry.content) : entry.content;
+        const size = dataBytes.length;
+        const crc = calcCrc32(dataBytes);
+
+        const localHeader = new Uint8Array(30 + nameBytes.length);
+        const lv = new DataView(localHeader.buffer);
+        lv.setUint32(0, 0x04034b50, true);
+        lv.setUint16(4, 20, true);
+        lv.setUint16(6, 0, true);
+        lv.setUint16(8, 0, true);
+        lv.setUint16(10, 0, true);
+        lv.setUint16(12, 0x5421, true);
+        lv.setUint32(14, crc, true);
+        lv.setUint32(18, size, true);
+        lv.setUint32(22, size, true);
+        lv.setUint16(26, nameBytes.length, true);
+        lv.setUint16(28, 0, true);
+        localHeader.set(nameBytes, 30);
+        localParts.push(localHeader, dataBytes);
+
+        const centralHeader = new Uint8Array(46 + nameBytes.length);
+        const cv = new DataView(centralHeader.buffer);
+        cv.setUint32(0, 0x02014b50, true);
+        cv.setUint16(4, 20, true);
+        cv.setUint16(6, 20, true);
+        cv.setUint16(8, 0, true);
+        cv.setUint16(10, 0, true);
+        cv.setUint16(12, 0x5421, true);
+        cv.setUint32(16, crc, true);
+        cv.setUint32(20, size, true);
+        cv.setUint32(24, size, true);
+        cv.setUint16(28, nameBytes.length, true);
+        cv.setUint16(30, 0, true);
+        cv.setUint16(32, 0, true);
+        cv.setUint16(34, 0, true);
+        cv.setUint16(36, 0, true);
+        cv.setUint32(38, 0, true);
+        cv.setUint32(42, offset, true);
+        centralHeader.set(nameBytes, 46);
+        centralParts.push(centralHeader);
+
+        offset += localHeader.length + size;
+      }
+
+      const cdStart = offset;
+      let cdSize = 0;
+      for (const p of centralParts) cdSize += p.length;
+
+      const eocd = new Uint8Array(22);
+      const ev = new DataView(eocd.buffer);
+      ev.setUint32(0, 0x06054b50, true);
+      ev.setUint16(8, fileEntries.length, true);
+      ev.setUint16(10, fileEntries.length, true);
+      ev.setUint32(12, cdSize, true);
+      ev.setUint32(16, cdStart, true);
+
+      return new Blob([...localParts, ...centralParts, eocd], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
+    }
+
+    function escapeXml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+    }
+
+    function indexToColLetter(colIdx) {
+      let n = colIdx + 1;
+      let s = "";
+      while (n > 0) {
+        const m = (n - 1) % 26;
+        s = String.fromCharCode(65 + m) + s;
+        n = Math.floor((n - 1) / 26);
+      }
+      return s;
+    }
+
+    function generateSheetXml(gridRows, colWidths, isStandard12Cols = true) {
+      let rowsXml = "";
+      for (let rIdx = 0; rIdx < gridRows.length; rIdx++) {
+        const row = gridRows[rIdx];
+        const rNum = rIdx + 1;
+        const rowHeight = rIdx === 0 ? 28 : 25;
+        let cellsXml = "";
+
+        for (let cIdx = 0; cIdx < row.length; cIdx++) {
+          const val = row[cIdx] ?? "";
+          const cellRef = indexToColLetter(cIdx) + rNum;
+
+          let styleId = 3;
+          if (rIdx === 0) {
+            styleId = isStandard12Cols ? 1 : 5;
+          } else if (isStandard12Cols && cIdx === 0) {
+            styleId = 2;
+          } else if (isStandard12Cols && (cIdx === 1 || cIdx === 4 || cIdx === 7)) {
+            styleId = 4;
+          }
+
+          if (rIdx > 0 && isStandard12Cols && cIdx === 0 && /^\d+$/.test(String(val))) {
+            cellsXml += `<c r="${cellRef}" s="${styleId}"><v>${parseInt(val, 10)}</v></c>`;
+          } else {
+            cellsXml += `<c r="${cellRef}" s="${styleId}" t="inlineStr"><is><t>${escapeXml(val)}</t></is></c>`;
+          }
+        }
+        rowsXml += `<row r="${rNum}" ht="${rowHeight}" customHeight="1">${cellsXml}</row>`;
+      }
+
+      const colsXml = colWidths.map((w, idx) =>
+        `<col min="${idx + 1}" max="${idx + 1}" width="${w}" customWidth="1"/>`
+      ).join("");
+
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetViews>
+    <sheetView tabSelected="1" workbookViewId="0" showGridLines="1">
+      <pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>
+    </sheetView>
+  </sheetViews>
+  <cols>${colsXml}</cols>
+  <sheetData>${rowsXml}</sheetData>
+</worksheet>`;
+    }
+
+    function generateMultiSheetXlsxBlob(sheets) {
+      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="1">
+    <numFmt numFmtId="164" formatCode="@"/>
+  </numFmts>
+  <fonts count="4">
+    <font><sz val="11"/><color rgb="FF000000"/><name val="Times New Roman"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Times New Roman"/></font>
+    <font><b/><sz val="11"/><color rgb="FF000000"/><name val="Times New Roman"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Times New Roman"/></font>
+  </fonts>
+  <fills count="4">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF0A2540"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF991B1B"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border>
+      <left style="thin"><color rgb="FFD1D5DB"/></left>
+      <right style="thin"><color rgb="FFD1D5DB"/></right>
+      <top style="thin"><color rgb="FFD1D5DB"/></top>
+      <bottom style="thin"><color rgb="FFD1D5DB"/></bottom>
+      <diagonal/>
+    </border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="6">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="center" vertical="center" wrapText="1"/>
+    </xf>
+    <xf numFmtId="1" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="center" vertical="center"/>
+    </xf>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="left" vertical="center" wrapText="1"/>
+    </xf>
+    <xf numFmtId="164" fontId="2" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="left" vertical="center" wrapText="1"/>
+    </xf>
+    <xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment horizontal="center" vertical="center" wrapText="1"/>
+    </xf>
+  </cellXfs>
+</styleSheet>`;
+
+      const sheetEntriesXml = sheets.map((sh, idx) =>
+        `<sheet name="${escapeXml(sh.name)}" sheetId="${idx + 1}" r:id="rId${idx + 1}"/>`
+      ).join("");
+
+      const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>${sheetEntriesXml}</sheets>
+</workbook>`;
+
+      const wbRelEntriesXml = sheets.map((sh, idx) =>
+        `<Relationship Id="rId${idx + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${idx + 1}.xml"/>`
+      ).join("") + `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`;
+
+      const wbRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${wbRelEntriesXml}
+</Relationships>`;
+
+      const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+      const overrideSheetsXml = sheets.map((sh, idx) =>
+        `<Override PartName="/xl/worksheets/sheet${idx + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+      ).join("");
+
+      const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  ${overrideSheetsXml}
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+
+      const files = [
+        { name: "[Content_Types].xml", content: contentTypesXml },
+        { name: "_rels/.rels", content: rootRelsXml },
+        { name: "xl/workbook.xml", content: workbookXml },
+        { name: "xl/_rels/workbook.xml.rels", content: wbRelsXml },
+        { name: "xl/styles.xml", content: stylesXml }
+      ];
+
+      sheets.forEach((sh, idx) => {
+        const sheetXml = generateSheetXml(sh.grid, sh.widths, sh.isStandard !== false);
+        files.push({ name: `xl/worksheets/sheet${idx + 1}.xml`, content: sheetXml });
+      });
+
+      return buildStoreZip(files);
+    }
+
+    function triggerDownloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    // Hiển thị & Lọc
+    function renderTableHeader() {
+      const tr = document.getElementById("tableHeaderRow");
+      const titleEl = document.getElementById("tableTitleText");
+      const exportBtnEl = document.getElementById("exportBtnText");
+
+      if (appState.dataMode === "CASE") {
+        if (titleEl) titleEl.textContent = "Bảng Kết Quả Chuẩn Hóa Sổ Vụ Án (24 Cột Chuẩn - VKSND TP. Hồ Chí Minh)";
+        if (exportBtnEl) exportBtnEl.textContent = "Xuất Excel (24 Cột & Pivot)";
+        if (tr) {
+          tr.innerHTML = `
+            <th class="py-3 px-2 border-r border-slate-700 text-center w-11">STT</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[170px]">Mã vụ án</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[240px]">Tên vụ án / Nội dung / QĐ TĐC</th>
+            <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[140px] bg-[#153E75] text-amber-300 font-black">🏛️ Tỉnh / Thành phố</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[100px]">Số QĐ khởi tố</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[115px]">📅 Ngày QĐ khởi tố</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[200px]">Đơn vị ra QĐ khởi tố</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[95px]">Số thụ lý</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[115px]">📅 Ngày thụ lý</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[125px]">Loại thụ lý</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[220px]">Đơn vị VKS thụ lý</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[120px]">📅 Ngày tiếp nhận</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[120px]">📅 Thời hạn GQ</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[135px] bg-red-950/80 text-rose-300 font-black">📅 Ngày hết thời hiệu</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[115px] bg-red-950/80 text-amber-300 font-black">⏳ Số ngày còn lại</th>
+            <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[185px] bg-red-950 text-white font-black">🚨 Mức độ khẩn cấp</th>
+            <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[170px]">Cảnh báo thời hiệu</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[180px]">Bị can đầu vụ & CCCD</th>
+            <th class="py-3 px-2 border-r border-slate-700 text-center min-w-[90px]">Tổng bị can</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[240px]">Thông tin tội danh / Điều luật</th>
+            <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[130px]">Phân loại tội</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[130px]">Cán bộ thụ lý</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[200px]">Cán bộ giải quyết (KSV)</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[110px]">Giai đoạn</th>
+            <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[140px]">Trạng thái vụ án</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[160px]">Trạng thái biểu mẫu</th>
+            <th class="py-3 px-2 text-center w-11">Xóa</th>
+          `;
+        }
+      } else {
+        if (titleEl) titleEl.textContent = "Bảng Kết Quả Chuẩn Hóa 12 Cột (VKSND TP. Hồ Chí Minh)";
+        if (exportBtnEl) exportBtnEl.textContent = "Xuất Excel (12 Cột & Pivot)";
+        if (tr) {
+          tr.innerHTML = `
+            <th class="py-3 px-2 border-r border-slate-700 text-center w-11">STT</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[165px]">Mã vụ án</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[220px]">Tên vụ án</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[180px]">Cơ quan CSĐT</th>
+            <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[145px] bg-[#153E75] text-amber-300 font-black">🏛️ Tỉnh / Thành phố</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[100px]">Giai đoạn</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[175px]">Mã bị can</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[145px]">Tên bị can</th>
+            <th class="py-3 px-2.5 border-r border-slate-700 text-center min-w-[95px]">Ngày sinh</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[120px]">Số CCCD</th>
+            <th class="py-3 px-3 border-r border-slate-700 min-w-[220px]">Điều luật</th>
+            <th class="py-3 px-3 border-r border-slate-700 text-center min-w-[120px]">Trạng thái</th>
+            <th class="py-3 px-2 text-center w-11">Xóa</th>
+          `;
+        }
+      }
+    }
+
+    function getFilteredRecords() {
+      const q = appState.searchQuery.trim().toLowerCase();
+      return appState.records.filter(r => {
+        if (appState.provinceFilter !== "ALL" && r.tinhThanh !== appState.provinceFilter) {
+          return false;
+        }
+        if (appState.stageFilter !== "ALL") {
+          const stg = (r.giaiDoan || "").toLowerCase();
+          if (!stg.includes(appState.stageFilter.toLowerCase())) return false;
+        }
+        if (appState.statusFilter !== "ALL") {
+          const st = ((r.trangThaiVuAn || r.trangThai || "")).toLowerCase();
+          if (!st.includes(appState.statusFilter.toLowerCase())) return false;
+        }
+        if (appState.urgencyFilter !== "ALL") {
+          const urg = r.mucDoKhanCap || "";
+          if (!urg.includes(appState.urgencyFilter)) return false;
+        }
+        if (q) {
+          if (appState.dataMode === "CASE") {
+            const hay = [
+              r.maVuAn, r.tenVuAn, r.soQdKhoiTo, r.donViKhoiTo, r.tinhThanh,
+              r.soThuLy, r.vksThuLy, r.biCanDauVu, r.tongBiCan, r.dieuLuat,
+              r.loaiToi, r.canBoThuLy, r.canBoGiaiQuyet, r.giaiDoan, r.trangThaiVuAn, r.canhBaoThoiHieu
+            ].filter(Boolean).join(" ").toLowerCase();
+            if (!hay.includes(q)) return false;
+          } else {
+            const hay = [
+              r.maVuAn, r.tenVuAn, r.cqdt, r.tinhThanh, r.giaiDoan,
+              r.maBiCan, r.tenBiCan, r.ngaySinh, r.soCccd, r.dieuLuat, r.trangThai
+            ].filter(Boolean).join(" ").toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    function updateProvinceDropdown() {
+      const provSelect = document.getElementById("provinceFilter");
+      if (!provSelect) return;
+      const currentVal = appState.provinceFilter;
+      const uniqueProvs = Array.from(new Set(appState.records.map(r => r.tinhThanh).filter(Boolean))).sort();
+
+      provSelect.innerHTML = `<option value="ALL">🏛️ Tất cả Tỉnh/Thành (${uniqueProvs.length})</option>`;
+      uniqueProvs.forEach(p => {
+        const count = appState.records.filter(r => r.tinhThanh === p).length;
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = `${p} (${count})`;
+        if (p === currentVal) opt.selected = true;
+        provSelect.appendChild(opt);
+      });
+    }
+
+    function updateKPIs() {
+      const recs = appState.records;
+
+      const lblTotal = document.getElementById("kpiLabelTotal");
+      const subTotal = document.getElementById("kpiSubTotal");
+      const lblCases = document.getElementById("kpiLabelCases");
+      const subCases = document.getElementById("kpiSubCases");
+      const lblProvs = document.getElementById("kpiLabelProvinces");
+      const subProvs = document.getElementById("kpiSubProvinces");
+      const lblStages = document.getElementById("kpiLabelStages");
+      const subStages = document.getElementById("kpiSubStages");
+      const lblStatus = document.getElementById("kpiLabelStatus");
+      const subStatus = document.getElementById("kpiSubStatus");
+
+      if (appState.dataMode === "CASE") {
+        if (lblTotal) lblTotal.textContent = "TỔNG SỐ VỤ ÁN";
+        if (subTotal) subTotal.textContent = "Hồ sơ vụ án đang thụ lý";
+        document.getElementById("kpiTotal").textContent = String(recs.length);
+
+        const expiringCases = recs.filter(r => (r.canhBaoThoiHieu || "").toLowerCase().includes("thời hiệu") || (r.canhBaoThoiHieu || "").toLowerCase().includes("sắp hết"));
+        if (lblCases) lblCases.textContent = "SẮP HẾT THỜI HIỆU";
+        if (subCases) subCases.textContent = "Cần kiểm tra xử lý gấp";
+        document.getElementById("kpiCases").textContent = String(expiringCases.length);
+
+        const uniqueVKS = new Set(recs.map(r => (r.vksThuLy || "").trim()).filter(Boolean));
+        if (lblProvs) lblProvs.textContent = "ĐƠN VỊ VKS THỤ LÝ";
+        if (subProvs) subProvs.textContent = "Các VKS quận/huyện & Phòng";
+        document.getElementById("kpiProvinces").textContent = String(uniqueVKS.size);
+
+        const crimeCounts = {};
+        for (const r of recs) {
+          const lt = (r.loaiToi || "").trim() || "Chưa phân loại";
+          crimeCounts[lt] = (crimeCounts[lt] || 0) + 1;
+        }
+        if (lblStages) lblStages.textContent = "PHÂN LOẠI TỘI PHẠM";
+        if (subStages) subStages.textContent = "Mức độ nghiêm trọng của tội";
+        const crimeText = Object.entries(crimeCounts).map(([k, v]) => `${k}: ${v}`).join(" | ") || "Chưa có";
+        document.getElementById("kpiStages").textContent = crimeText;
+
+        const statusCounts = {};
+        for (const r of recs) {
+          const st = (r.trangThaiVuAn || "").trim() || "Chưa rõ";
+          statusCounts[st] = (statusCounts[st] || 0) + 1;
+        }
+        if (lblStatus) lblStatus.textContent = "TRẠNG THÁI VỤ ÁN";
+        if (subStatus) subStatus.textContent = "Đang điều tra, tạm đình chỉ...";
+        const statusText = Object.entries(statusCounts).map(([k, v]) => `${k}: ${v}`).join(" | ") || "Chưa có";
+        document.getElementById("kpiStatus").textContent = statusText;
+
+      } else {
+        if (lblTotal) lblTotal.textContent = "TỔNG SỐ BỊ CAN";
+        if (subTotal) subTotal.textContent = "Đối tượng đã khởi tố";
+        document.getElementById("kpiTotal").textContent = String(recs.length);
+
+        const uniqueCases = new Set(recs.map(r => (r.maVuAn || "").trim()).filter(Boolean));
+        if (lblCases) lblCases.textContent = "SỐ VỤ ÁN";
+        if (subCases) subCases.textContent = "Theo mã vụ án QLAHS";
+        document.getElementById("kpiCases").textContent = String(uniqueCases.size);
+
+        const uniqueProvs = new Set(recs.map(r => (r.tinhThanh || "").trim()).filter(Boolean));
+        if (lblProvs) lblProvs.textContent = "TỈNH / THÀNH PHỐ";
+        if (subProvs) subProvs.textContent = "Nhận dạng từ CQĐT";
+        document.getElementById("kpiProvinces").textContent = String(uniqueProvs.size);
+
+        const stageCounts = {};
+        const statusCounts = {};
+        for (const r of recs) {
+          const gd = (r.giaiDoan || "").trim() || "Chưa rõ";
+          stageCounts[gd] = (stageCounts[gd] || 0) + 1;
+          const tt = (r.trangThai || "").trim() || "Khác";
+          statusCounts[tt] = (statusCounts[tt] || 0) + 1;
+        }
+        if (lblStages) lblStages.textContent = "GIAI ĐOẠN TỐ TỤNG";
+        if (subStages) subStages.textContent = "Khởi tố, ĐT, Truy tố, Xử";
+        const stageText = Object.entries(stageCounts).map(([k, v]) => `${k}: ${v}`).join(" | ") || "Chưa có dữ liệu";
+        document.getElementById("kpiStages").textContent = stageText;
+
+        if (lblStatus) lblStatus.textContent = "TRẠNG THÁI HỒ SƠ";
+        if (subStatus) subStatus.textContent = "Đình nã, Truy nã, Tạm ĐC";
+        const statusText = Object.entries(statusCounts).map(([k, v]) => `${k}: ${v}`).join(" | ") || "Chưa có dữ liệu";
+        document.getElementById("kpiStatus").textContent = statusText;
+      }
+    }
+
+    function renderTable() {
+      renderTableHeader();
+      updateKPIs();
+      updateProvinceDropdown();
+      const tbody = document.getElementById("resultTableBody");
+      const filtered = getFilteredRecords();
+      tbody.innerHTML = "";
+
+      const colSpan = appState.dataMode === "CASE" ? 25 : 13;
+
+      if (filtered.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="${colSpan}" class="py-12 text-center text-slate-400 font-bold text-sm">Không tìm thấy bản ghi nào khớp với điều kiện lọc.</td>`;
+        tbody.appendChild(tr);
+      } else {
+        filtered.forEach((rec, idx) => {
+          const tr = document.createElement("tr");
+          tr.className = idx % 2 === 1 ? "bg-slate-50/70 hover:bg-amber-50/50 transition-colors" : "bg-white hover:bg-amber-50/50 transition-colors";
+
+          let fields = [];
+          if (appState.dataMode === "CASE") {
+                        const isSapHet = (rec.canhBaoThoiHieu || "").toLowerCase().includes("sắp hết");
+            const canhBaoBadgeCls = isSapHet
+              ? "bg-rose-100 text-rose-900 border border-rose-300 font-black px-2.5 py-0.5 rounded-full shadow-sm text-[11px]"
+              : (rec.canhBaoThoiHieu ? "bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2.5 py-0.5 rounded-full text-[11px]" : "");
+
+            let loaiToiCls = "bg-slate-100 text-slate-800 border border-slate-300 font-medium px-2 py-0.5 rounded-full text-[11px]";
+            const ltLow = (rec.loaiToi || "").toLowerCase();
+            if (ltLow.includes("rất nghiêm trọng") || ltLow.includes("đặc biệt")) {
+              loaiToiCls = "bg-red-100 text-red-900 border border-red-300 font-black px-2 py-0.5 rounded-full shadow-sm text-[11px]";
+            } else if (ltLow.includes("nghiêm trọng")) {
+              loaiToiCls = "bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded-full shadow-sm text-[11px]";
+            } else if (ltLow.includes("ít nghiêm trọng")) {
+              loaiToiCls = "bg-blue-100 text-blue-900 border border-blue-300 font-medium px-2 py-0.5 rounded-full text-[11px]";
+            }
+
+            // Urgency badge styling
+            let urgBadgeCls = "bg-slate-100 text-slate-700 font-medium px-2.5 py-0.5 rounded-full text-[11px]";
+            const urgStr = rec.mucDoKhanCap || "";
+            if (urgStr.includes("🔴")) {
+              urgBadgeCls = "bg-red-100 text-red-900 border-2 border-red-400 font-black px-2.5 py-0.5 rounded-full shadow text-[11px] animate-pulse";
+            } else if (urgStr.includes("🟠")) {
+              urgBadgeCls = "bg-amber-100 text-amber-900 border border-amber-400 font-bold px-2.5 py-0.5 rounded-full shadow-sm text-[11px]";
+            } else if (urgStr.includes("🟡")) {
+              urgBadgeCls = "bg-yellow-100 text-yellow-900 border border-yellow-300 font-medium px-2.5 py-0.5 rounded-full text-[11px]";
+            }
+
+            const fmtDate = (d) => d ? `<span class="font-mono text-slate-800 font-semibold bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200">📅 ${escapeXml(d)}</span>` : '<span class="text-slate-300">-</span>';
+
+            fields = [
+              { key: "stt", html: `<span class="font-bold text-slate-500">${rec.stt}</span>`, cls: "text-center" },
+              { key: "maVuAn", html: `<span class="font-mono font-bold text-indigo-950 bg-indigo-50/90 px-2 py-0.5 rounded-lg border border-indigo-200">${escapeXml(rec.maVuAn)}</span>`, cls: "" },
+              { key: "tenVuAn", html: `<span class="font-bold text-slate-900">${escapeXml(rec.tenVuAn)}</span>`, cls: "" },
+              { key: "tinhThanh", html: `<span class="inline-flex items-center gap-1 font-black text-sky-950 bg-sky-100 border border-sky-300 px-2.5 py-0.5 rounded-full shadow-sm">🏛️ ${escapeXml(rec.tinhThanh)}</span>`, cls: "text-center" },
+              { key: "soQdKhoiTo", html: `<span class="font-mono text-slate-800 font-bold">${escapeXml(rec.soQdKhoiTo)}</span>`, cls: "text-center" },
+              { key: "ngayQdKhoiTo", html: fmtDate(rec.ngayQdKhoiTo), cls: "text-center" },
+              { key: "donViKhoiTo", html: `<span class="text-slate-800 font-medium">${escapeXml(rec.donViKhoiTo)}</span>`, cls: "" },
+              { key: "soThuLy", html: `<span class="font-mono text-slate-800 font-bold">${escapeXml(rec.soThuLy)}</span>`, cls: "text-center" },
+              { key: "ngayThuLy", html: fmtDate(rec.ngayThuLy), cls: "text-center" },
+              { key: "loaiThuLy", html: `<span class="text-slate-800 font-medium">${escapeXml(rec.loaiThuLy)}</span>`, cls: "" },
+              { key: "vksThuLy", html: `<span class="text-blue-950 font-bold bg-blue-50/60 px-2 py-0.5 rounded border border-blue-200">${escapeXml(rec.vksThuLy)}</span>`, cls: "" },
+              { key: "ngayTiepNhan", html: fmtDate(rec.ngayTiepNhan), cls: "text-center" },
+              { key: "thoiHanGiaiQuyet", html: fmtDate(rec.thoiHanGiaiQuyet), cls: "text-center" },
+              { key: "ngayHetThoiHieu", html: `<span class="font-mono font-black text-rose-900 bg-rose-100/90 border border-rose-300 px-2 py-0.5 rounded-lg shadow-sm">📅 ${escapeXml(rec.ngayHetThoiHieu)}</span>`, cls: "text-center" },
+              { key: "soNgayConLai", html: `<span class="font-mono font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">${escapeXml(rec.soNgayConLai || "-")}</span>`, cls: "text-center" },
+              { key: "mucDoKhanCap", html: `<span class="${urgBadgeCls}">${escapeXml(rec.mucDoKhanCap || "-")}</span>`, cls: "text-center" },
+              { key: "canhBaoThoiHieu", html: rec.canhBaoThoiHieu ? `<span class="${canhBaoBadgeCls}">${escapeXml(rec.canhBaoThoiHieu)}</span>` : `<span class="text-slate-400">-</span>`, cls: "text-center" },
+              { key: "biCanDauVu", html: `<span class="font-bold text-slate-900">${escapeXml(rec.biCanDauVu)}</span>`, cls: "" },
+              { key: "tongBiCan", html: `<span class="font-mono font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">${escapeXml(rec.tongBiCan || "0")}</span>`, cls: "text-center" },
+              { key: "dieuLuat", html: `<span class="text-slate-800">${escapeXml(formatLawDisplay(rec.dieuLuat))}</span>`, cls: "" },
+              { key: "loaiToi", html: `<span class="${loaiToiCls}">${escapeXml(rec.loaiToi || "Chưa phân loại")}</span>`, cls: "text-center" },
+              { key: "canBoThuLy", html: `<span class="text-slate-700 font-medium">${escapeXml(rec.canBoThuLy)}</span>`, cls: "" },
+              { key: "canBoGiaiQuyet", html: `<span class="text-slate-900 font-bold bg-slate-100 px-1.5 py-0.5 rounded">${escapeXml(rec.canBoGiaiQuyet)}</span>`, cls: "" },
+              { key: "giaiDoan", html: `<span class="inline-flex items-center font-bold text-emerald-950 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full shadow-sm">${escapeXml(rec.giaiDoan || "Điều tra")}</span>`, cls: "text-center" },
+              { key: "trangThaiVuAn", html: `<span class="inline-flex items-center font-bold text-amber-950 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full shadow-sm">${escapeXml(rec.trangThaiVuAn)}</span>`, cls: "text-center" },
+              { key: "trangThaiBieuMau", html: `<span class="text-slate-700 text-[11px]">${escapeXml(rec.trangThaiBieuMau)}</span>`, cls: "" }
+            ];
+          } else {
+            const isTruyNa = (rec.trangThai || "").toLowerCase().includes("truy nã");
+            const isDinhNa = (rec.trangThai || "").toLowerCase().includes("đình nã");
+            const statusBadgeCls = isTruyNa
+              ? "bg-rose-100 text-rose-900 border border-rose-300 font-black px-2.5 py-0.5 rounded-full shadow-sm"
+              : (isDinhNa
+                  ? "bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2.5 py-0.5 rounded-full shadow-sm"
+                  : "bg-slate-100 text-slate-800 border border-slate-300 font-medium px-2.5 py-0.5 rounded-full");
+
+            fields = [
+              { key: "stt", html: `<span class="font-bold text-slate-500">${rec.stt}</span>`, cls: "text-center" },
+              { key: "maVuAn", html: `<span class="font-mono font-bold text-indigo-950 bg-indigo-50/90 px-2 py-0.5 rounded-lg border border-indigo-200">${escapeXml(rec.maVuAn)}</span>`, cls: "" },
+              { key: "tenVuAn", html: `<span class="font-bold text-slate-900">${escapeXml(rec.tenVuAn)}</span>`, cls: "" },
+              { key: "cqdt", html: `<span class="text-slate-700 font-medium">${escapeXml(rec.cqdt)}</span>`, cls: "" },
+              { key: "tinhThanh", html: `<span class="inline-flex items-center gap-1 font-black text-sky-950 bg-sky-100 border border-sky-300 px-2.5 py-0.5 rounded-full shadow-sm">🏛️ ${escapeXml(rec.tinhThanh)}</span>`, cls: "text-center" },
+              { key: "giaiDoan", html: `<span class="inline-flex items-center font-bold text-emerald-950 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full shadow-sm">${escapeXml(rec.giaiDoan)}</span>`, cls: "text-center" },
+              { key: "maBiCan", html: `<span class="font-mono text-slate-800">${escapeXml(rec.maBiCan)}</span>`, cls: "" },
+              { key: "tenBiCan", html: `<span class="font-black text-blue-950 bg-blue-50/50 px-1 rounded">${escapeXml(rec.tenBiCan)}</span>`, cls: "" },
+              { key: "ngaySinh", html: `<span class="font-mono text-slate-700">${escapeXml(rec.ngaySinh)}</span>`, cls: "text-center" },
+              { key: "soCccd", html: `<span class="font-mono font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded">${escapeXml(rec.soCccd)}</span>`, cls: "" },
+              { key: "dieuLuat", html: `<span class="text-slate-800">${escapeXml(formatLawDisplay(rec.dieuLuat))}</span>`, cls: "" },
+              { key: "trangThai", html: `<span class="${statusBadgeCls}">${escapeXml(rec.trangThai)}</span>`, cls: "text-center" }
+            ];
+          }
+
+          fields.forEach(f => {
+            const td = document.createElement("td");
+            td.className = `py-2.5 px-2.5 border-r border-slate-200 cell-edit ${f.cls}`;
+            td.contentEditable = "true";
+            td.innerHTML = f.html;
+            td.addEventListener("blur", () => {
+              const target = appState.records.find(item => item.id === rec.id);
+              if (target) {
+                target[f.key] = td.textContent.trim().replace(/^🏛️\s*/, "");
+                updateKPIs();
+                renderPivotTable();
+              }
+            });
+            tr.appendChild(td);
+          });
+
+          // Delete button cell
+          const tdDel = document.createElement("td");
+          tdDel.className = "py-2.5 px-2 text-center";
+          const btnDel = document.createElement("button");
+          btnDel.type = "button";
+          btnDel.className = "w-6 h-6 rounded-full bg-rose-100 text-rose-600 hover:bg-rose-600 hover:text-white font-bold flex items-center justify-center mx-auto transition";
+          btnDel.textContent = "×";
+          btnDel.title = "Xóa dòng này";
+          btnDel.addEventListener("click", () => {
+            appState.records = appState.records.filter(item => item.id !== rec.id);
+            renderTable();
+            renderPivotTable();
+            showToast("Đã xóa 1 dòng bản ghi.");
+          });
+          tdDel.appendChild(btnDel);
+          tr.appendChild(tdDel);
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      const footerLabel = appState.dataMode === "CASE" ? "vụ án chuẩn hóa" : "bản ghi chuẩn hóa";
+      document.getElementById("rowCountFooter").textContent =
+        `Hiển thị ${filtered.length} / ${appState.records.length} ${footerLabel}`;
+    }
+
+    // =========================================================================
+    // 6. THUẬT TOÁN PIVOT TABLE MÀU SẮC SINH ĐỘNG
+    // =========================================================================
+    function getPivotData() {
+      const recs = appState.records;
+
+      if (appState.dataMode === "CASE") {
+        const rowValsSet = new Set();
+        const colValsSet = new Set();
+
+        recs.forEach(r => {
+          rowValsSet.add((r.vksThuLy || "").trim() || "Chưa rõ VKS");
+          colValsSet.add((r.loaiToi || "").trim() || "Chưa phân loại");
+        });
+
+        const crimeOrder = ["Ít nghiêm trọng", "Nghiêm trọng", "Rất nghiêm trọng", "Đặc biệt nghiêm trọng"];
+        const colValsFound = Array.from(colValsSet);
+        const colVals = crimeOrder.filter(c => colValsFound.includes(c));
+        colValsFound.forEach(c => {
+          if (!colVals.includes(c)) colVals.push(c);
+        });
+
+        const rowVals = Array.from(rowValsSet).sort((a, b) => a.localeCompare(b, "vi"));
+        const matrix = {};
+        const rowTotals = {};
+        const colTotals = {};
+        colVals.forEach(c => colTotals[c] = 0);
+        let grandTotal = 0;
+
+        recs.forEach(r => {
+          const rVal = (r.vksThuLy || "").trim() || "Chưa rõ VKS";
+          const cVal = (r.loaiToi || "").trim() || "Chưa phân loại";
+
+          if (!matrix[rVal]) matrix[rVal] = {};
+          if (!matrix[rVal][cVal]) {
+            matrix[rVal][cVal] = { count: 0 };
+          }
+          matrix[rVal][cVal].count += 1;
+        });
+
+        rowVals.forEach(rVal => {
+          let rTotal = 0;
+          colVals.forEach(cVal => {
+            const count = matrix[rVal] && matrix[rVal][cVal] ? matrix[rVal][cVal].count : 0;
+            rTotal += count;
+            colTotals[cVal] = (colTotals[cVal] || 0) + count;
+          });
+          rowTotals[rVal] = rTotal;
+          grandTotal += rTotal;
+        });
+
+        return {
+          rowTitle: "Đơn vị VKS thụ lý",
+          rowVals,
+          colVals,
+          matrix,
+          rowTotals,
+          colTotals,
+          grandTotal,
+          valMode: "cases"
+        };
+      }
+
+      // DEFENDANT mode
+      const rowKey = appState.pivotRowField;
+      const colKey = appState.pivotColField;
+      const valMode = appState.pivotValueField;
+
+      const rowValsSet = new Set();
+      const colValsSet = new Set();
+
+      recs.forEach(r => {
+        rowValsSet.add(r[rowKey] || "(Chưa rõ)");
+        if (colKey !== "NONE") {
+          colValsSet.add(r[colKey] || "(Chưa rõ)");
+        }
+      });
+
+      const stageOrder = ["Điều tra", "Truy tố", "Sơ thẩm", "Phúc thẩm", "Thi hành án"];
+      const colVals = Array.from(colValsSet);
+      if (colKey === "giaiDoan") {
+        colVals.sort((a, b) => {
+          const ia = stageOrder.indexOf(a);
+          const ib = stageOrder.indexOf(b);
+          if (ia !== -1 && ib !== -1) return ia - ib;
+          if (ia !== -1) return -1;
+          if (ib !== -1) return 1;
+          return a.localeCompare(b, "vi");
+        });
+      } else {
+        colVals.sort((a, b) => a.localeCompare(b, "vi"));
+      }
+
+      const matrix = {};
+      const rowTotals = {};
+      const colTotals = {};
+      colVals.forEach(c => colTotals[c] = 0);
+      let grandTotal = 0;
+
+      recs.forEach(r => {
+        const rVal = r[rowKey] || "(Chưa rõ)";
+        const cVal = colKey !== "NONE" ? (r[colKey] || "(Chưa rõ)") : "__ALL__";
+        const caseId = (r.maVuAn || "").trim();
+
+        if (!matrix[rVal]) matrix[rVal] = {};
+        if (!matrix[rVal][cVal]) {
+          matrix[rVal][cVal] = { defCount: 0, cases: new Set() };
+        }
+        matrix[rVal][cVal].defCount += 1;
+        if (caseId) matrix[rVal][cVal].cases.add(caseId);
+      });
+
+      const rowVals = Array.from(rowValsSet);
+
+      rowVals.forEach(rVal => {
+        let rTotal = 0;
+        if (colKey === "NONE") {
+          const cell = matrix[rVal]["__ALL__"];
+          const count = valMode === "cases" ? cell.cases.size : cell.defCount;
+          rTotal = count;
+          grandTotal += count;
+        } else {
+          colVals.forEach(cVal => {
+            const cell = matrix[rVal] && matrix[rVal][cVal] ? matrix[rVal][cVal] : { defCount: 0, cases: new Set() };
+            const count = valMode === "cases" ? cell.cases.size : cell.defCount;
+            rTotal += count;
+            colTotals[cVal] = (colTotals[cVal] || 0) + count;
+          });
+          grandTotal += rTotal;
+        }
+        rowTotals[rVal] = rTotal;
+      });
+
+      rowVals.sort((a, b) => {
+        return (rowTotals[b] || 0) - (rowTotals[a] || 0) || a.localeCompare(b, "vi");
+      });
+
+      return {
+        rowTitle: "Tỉnh / Thành phố",
+        rowVals,
+        colVals,
+        matrix,
+        rowTotals,
+        colTotals,
+        grandTotal,
+        valMode
+      };
+    }
+
+    function renderPivotTable() {
+      const thead = document.getElementById("pivotTableHead");
+      const tbody = document.getElementById("pivotTableBody");
+      const tfoot = document.getElementById("pivotTableFoot");
+      thead.innerHTML = "";
+      tbody.innerHTML = "";
+      tfoot.innerHTML = "";
+
+      const pData = getPivotData();
+      const { rowTitle, rowVals, colVals, matrix, rowTotals, colTotals, grandTotal, valMode } = pData;
+
+      if (rowVals.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-12 text-center text-slate-400 font-bold">Chưa có dữ liệu để tổng hợp bảng Pivot.</td></tr>`;
+        return;
+      }
+
+      // 1. Dựng Header
+      const headTr = document.createElement("tr");
+      headTr.className = "bg-[#0A2540] text-white font-bold tracking-wide";
+
+      let headHtml = `
+        <th class="py-3 px-2 border-r border-slate-700 text-center w-11">STT</th>
+        <th class="py-3 px-3 border-r border-slate-700 text-left min-w-[220px]">${rowTitle}</th>
+      `;
+
+      if (appState.dataMode === "CASE") {
+        headHtml += `<th class="py-3 px-3 border-r border-slate-700 text-center min-w-[120px] bg-[#153E75] text-amber-300 font-black">Tổng số vụ án</th>`;
+      }
+
+      colVals.forEach(cVal => {
+        headHtml += `<th class="py-3 px-3 border-r border-slate-700 text-center min-w-[110px]">${escapeXml(cVal)}</th>`;
+      });
+
+      if (appState.dataMode !== "CASE") {
+        headHtml += `<th class="py-3 px-3 border-r border-slate-700 text-center min-w-[110px] bg-[#153E75] text-amber-300 font-black">Tổng cộng</th>`;
+      }
+      headHtml += `<th class="py-3 px-3 text-center min-w-[90px] bg-red-950 text-rose-300 font-black">Tỷ lệ %</th>`;
+
+      headTr.innerHTML = headHtml;
+      thead.appendChild(headTr);
+
+      // 2. Dựng Body Rows
+      rowVals.forEach((rVal, idx) => {
+        const tr = document.createElement("tr");
+        tr.className = idx % 2 === 1 ? "bg-slate-50/70 hover:bg-amber-50/50 transition-colors" : "bg-white hover:bg-amber-50/50 transition-colors";
+
+        const rTotal = rowTotals[rVal] || 0;
+        const pct = grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) + "%" : "0%";
+
+        let rowHtml = `
+          <td class="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-500">${idx + 1}</td>
+          <td class="py-2.5 px-3 border-r border-slate-200 font-bold text-slate-900">${escapeXml(rVal)}</td>
+        `;
+
+        if (appState.dataMode === "CASE") {
+          rowHtml += `<td class="py-2.5 px-3 border-r border-slate-200 text-center font-black text-blue-900 bg-blue-50/80">${rTotal}</td>`;
+        }
+
+        colVals.forEach(cVal => {
+          let count = 0;
+          if (appState.dataMode === "CASE") {
+            count = matrix[rVal] && matrix[rVal][cVal] ? matrix[rVal][cVal].count : 0;
+          } else {
+            const cell = matrix[rVal] && matrix[rVal][cVal] ? matrix[rVal][cVal] : { defCount: 0, cases: new Set() };
+            count = valMode === "cases" ? cell.cases.size : cell.defCount;
+          }
+          const numCls = count > 0 ? "font-bold text-slate-800" : "text-slate-300 font-normal";
+          rowHtml += `<td class="py-2.5 px-3 border-r border-slate-200 text-center ${numCls}">${count > 0 ? count : "-"}</td>`;
+        });
+
+        if (appState.dataMode !== "CASE") {
+          rowHtml += `<td class="py-2.5 px-3 border-r border-slate-200 text-center font-black text-blue-900 bg-blue-50/80">${rTotal}</td>`;
+        }
+        rowHtml += `<td class="py-2.5 px-3 text-center font-bold text-rose-700 bg-rose-50/60">${pct}</td>`;
+
+        tr.innerHTML = rowHtml;
+        tbody.appendChild(tr);
+      });
+
+      // 3. Dựng Total Footer
+      const footTr = document.createElement("tr");
+      footTr.className = "bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white font-black text-xs uppercase tracking-wider";
+
+      let footHtml = `
+        <td class="py-3 px-2 border-r border-slate-700 text-center text-amber-300">∑</td>
+        <td class="py-3 px-3 border-r border-slate-700 text-left text-amber-300">TỔNG CỘNG CHUNG</td>
+      `;
+
+      if (appState.dataMode === "CASE") {
+        footHtml += `<td class="py-3 px-3 border-r border-slate-700 text-center text-amber-300 text-sm font-black">${grandTotal}</td>`;
+      }
+
+      colVals.forEach(cVal => {
+        const cTotal = colTotals[cVal] || 0;
+        footHtml += `<td class="py-3 px-3 border-r border-slate-700 text-center text-white">${cTotal}</td>`;
+      });
+
+      if (appState.dataMode !== "CASE") {
+        footHtml += `<td class="py-3 px-3 border-r border-slate-700 text-center text-amber-300 text-sm font-black">${grandTotal}</td>`;
+      }
+      footHtml += `<td class="py-3 px-3 text-center text-rose-300 font-black">100.0%</td>`;
+
+      footTr.innerHTML = footHtml;
+      tfoot.appendChild(footTr);
+    }
+
+    async function exportPivotToExcel() {
+      const pData = getPivotData();
+      const { rowTitle, rowVals, colVals, matrix, rowTotals, colTotals, grandTotal, valMode } = pData;
+      if (rowVals.length === 0) {
+        showToast("Không có dữ liệu để xuất bảng Pivot!", true);
+        return;
+      }
+
+      await runWithLoading(
+        "Đang xuất file Excel Pivot Table",
+        "Đang tính toán các chỉ số và định dạng bảng Excel...",
+        async () => {
+          let headers = [];
+          if (appState.dataMode === "CASE") {
+            headers = ["STT", rowTitle, "Tổng số vụ án", ...colVals, "Tỷ lệ %"];
+          } else {
+            headers = ["STT", rowTitle, ...colVals, "Tổng cộng", "Tỷ lệ %"];
+          }
+          const grid = [headers];
+
+          rowVals.forEach((rVal, idx) => {
+            const rTotal = rowTotals[rVal] || 0;
+            const pct = grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) + "%" : "0%";
+            let row = [];
+            if (appState.dataMode === "CASE") {
+              row = [String(idx + 1), rVal, String(rTotal)];
+              colVals.forEach(cVal => {
+                const count = matrix[rVal] && matrix[rVal][cVal] ? matrix[rVal][cVal].count : 0;
+                row.push(String(count));
+              });
+            } else {
+              row = [String(idx + 1), rVal];
+              colVals.forEach(cVal => {
+                const cell = matrix[rVal] && matrix[rVal][cVal] ? matrix[rVal][cVal] : { defCount: 0, cases: new Set() };
+                const count = valMode === "cases" ? cell.cases.size : cell.defCount;
+                row.push(String(count));
+              });
+              row.push(String(rTotal));
+            }
+            row.push(pct);
+            grid.push(row);
+          });
+
+          let totalRow = [];
+          if (appState.dataMode === "CASE") {
+            totalRow = ["∑", "TỔNG CỘNG CHUNG", String(grandTotal), ...colVals.map(c => String(colTotals[c] || 0)), "100.0%"];
+          } else {
+            totalRow = ["∑", "TỔNG CỘNG CHUNG", ...colVals.map(c => String(colTotals[c] || 0)), String(grandTotal), "100.0%"];
+          }
+          grid.push(totalRow);
+
+          const widths = [8, 34, ...colVals.map(() => 16), 16, 14];
+          const blob = generateMultiSheetXlsxBlob([
+            { name: "Tong_Hop_Pivot_Table", grid: grid, widths: widths, isStandard: false }
+          ]);
+          triggerDownloadBlob(blob, "Pivot_Table_Tong_Hop_QLAHS.xlsx");
+          showToast("Đã tải xuống file Pivot_Table_Tong_Hop_QLAHS.xlsx!");
+        }
+      );
+    }
+
+    async function exportStandard12ColsAndPivotXlsx() {
+      const filtered = getFilteredRecords();
+      if (filtered.length === 0) {
+        showToast("Không có dữ liệu để xuất ra file Excel!", true);
+        return;
+      }
+
+      await runWithLoading(
+        appState.dataMode === "CASE" ? "Đang xuất file Excel chuẩn 24 cột & Pivot" : "Đang xuất file Excel chuẩn 12 cột & Pivot",
+        `Đang định dạng ${filtered.length} bản ghi và tạo 2 Sheet...`,
+        async () => {
+          let grid1 = [];
+          let widths1 = [];
+          let sheet1Name = "";
+
+          if (appState.dataMode === "CASE") {
+            sheet1Name = "Danh_Sach_Vu_An_Chuan_Hoa";
+            const headersCase26 = [
+              "STT", "Mã vụ án", "Tên vụ án / Nội dung / QĐ TĐC", "Tỉnh / Thành phố",
+              "Số QĐ khởi tố", "Ngày ra QĐ khởi tố", "Đơn vị ra QĐ khởi tố",
+              "Số thụ lý", "Ngày thụ lý", "Loại thụ lý", "Đơn vị VKS thụ lý",
+              "Ngày tiếp nhận hồ sơ", "Thời hạn giải quyết", "Ngày hết thời hiệu TNHS",
+              "Số ngày còn lại", "Mức độ khẩn cấp", "Cảnh báo thời hiệu",
+              "Bị can đầu vụ & CCCD", "Tổng số bị can", "Thông tin tội danh / Điều luật",
+              "Phân loại tội", "Cán bộ thụ lý", "Cán bộ giải quyết (KSV)",
+              "Giai đoạn tố tụng", "Trạng thái vụ án", "Trạng thái biểu mẫu"
+            ];
+            grid1 = [headersCase26];
+            filtered.forEach((r, idx) => {
+              grid1.push([
+                String(r.stt || idx + 1),
+                r.maVuAn || "",
+                r.tenVuAn || "",
+                r.tinhThanh || "",
+                r.soQdKhoiTo || "",
+                r.ngayQdKhoiTo || "",
+                r.donViKhoiTo || "",
+                r.soThuLy || "",
+                r.ngayThuLy || "",
+                r.loaiThuLy || "",
+                r.vksThuLy || "",
+                r.ngayTiepNhan || "",
+                r.thoiHanGiaiQuyet || "",
+                r.ngayHetThoiHieu || "",
+                r.soNgayConLai || "",
+                r.mucDoKhanCap || "",
+                r.canhBaoThoiHieu || "",
+                r.biCanDauVu || "",
+                r.tongBiCan || "",
+                formatLawDisplay(r.dieuLuat || ""),
+                r.loaiToi || "",
+                r.canBoThuLy || "",
+                r.canBoGiaiQuyet || "",
+                r.giaiDoan || "",
+                r.trangThaiVuAn || "",
+                r.trangThaiBieuMau || ""
+              ]);
+            });
+            widths1 = [8, 28, 38, 18, 14, 16, 30, 14, 16, 16, 34, 16, 16, 18, 15, 24, 26, 26, 14, 36, 18, 18, 28, 16, 22, 22];
+          } else {
+            sheet1Name = "Danh_Sach_12_Cot_Chuan";
+            const headers12 = [
+              "STT", "Mã vụ án", "Tên vụ án", "Cơ quan cảnh sát điều tra", "Tỉnh/Thành", "Giai đoạn",
+              "Mã bị can", "Tên bị can", "Ngày sinh", "Số CCCD", "Điều luật", "Trạng thái hồ sơ"
+            ];
+            grid1 = [headers12];
+            filtered.forEach((r, idx) => {
+              grid1.push([
+                String(r.stt || idx + 1),
+                r.maVuAn || "",
+                r.tenVuAn || "",
+                r.cqdt || "",
+                r.tinhThanh || "",
+                r.giaiDoan || "",
+                r.maBiCan || "",
+                r.tenBiCan || "",
+                r.ngaySinh || "",
+                r.soCccd || "",
+                formatLawDisplay(r.dieuLuat || ""),
+                r.trangThai || ""
+              ]);
+            });
+            widths1 = [8, 24, 34, 28, 20, 14, 26, 22, 14, 16, 36, 18];
+          }
+
+          // Sheet 2: Bảng Pivot Table Tổng hợp
+          updateLoadingDetail("Đang tổng hợp dữ liệu Sheet Pivot Table...");
+          await new Promise(r => setTimeout(r, 15));
+
+          const pData = getPivotData();
+          let headersPivot = [];
+          if (appState.dataMode === "CASE") {
+            headersPivot = ["STT", pData.rowTitle, "Tổng số vụ án", ...pData.colVals, "Tỷ lệ %"];
+          } else {
+            headersPivot = ["STT", pData.rowTitle, ...pData.colVals, "Tổng cộng", "Tỷ lệ %"];
+          }
+          const grid2 = [headersPivot];
+
+          pData.rowVals.forEach((rVal, idx) => {
+            const rTotal = pData.rowTotals[rVal] || 0;
+            const pct = pData.grandTotal > 0 ? (rTotal / pData.grandTotal * 100).toFixed(1) + "%" : "0%";
+            let row = [];
+            if (appState.dataMode === "CASE") {
+              row = [String(idx + 1), rVal, String(rTotal)];
+              pData.colVals.forEach(cVal => {
+                const count = pData.matrix[rVal] && pData.matrix[rVal][cVal] ? pData.matrix[rVal][cVal].count : 0;
+                row.push(String(count));
+              });
+            } else {
+              row = [String(idx + 1), rVal];
+              pData.colVals.forEach(cVal => {
+                const cell = pData.matrix[rVal] && pData.matrix[rVal][cVal] ? pData.matrix[rVal][cVal] : { defCount: 0, cases: new Set() };
+                const count = pData.valMode === "cases" ? cell.cases.size : cell.defCount;
+                row.push(String(count));
+              });
+              row.push(String(rTotal));
+            }
+            row.push(pct);
+            grid2.push(row);
+          });
+
+          let totalRow = [];
+          if (appState.dataMode === "CASE") {
+            totalRow = ["∑", "TỔNG CỘNG CHUNG", String(pData.grandTotal), ...pData.colVals.map(c => String(pData.colTotals[c] || 0)), "100.0%"];
+          } else {
+            totalRow = ["∑", "TỔNG CỘNG CHUNG", ...pData.colVals.map(c => String(pData.colTotals[c] || 0)), String(pData.grandTotal), "100.0%"];
+          }
+          grid2.push(totalRow);
+          const widths2 = [8, 34, ...pData.colVals.map(() => 16), 16, 14];
+
+          updateLoadingDetail("Đang nén dữ liệu XLSX và tạo tập tin tải về...");
+          await new Promise(r => setTimeout(r, 15));
+
+          const blob = generateMultiSheetXlsxBlob([
+            { name: sheet1Name, grid: grid1, widths: widths1, isStandard: true },
+            { name: "Tong_Hop_Pivot_Table", grid: grid2, widths: widths2, isStandard: false }
+          ]);
+
+          const now = new Date();
+          const pad = n => String(n).padStart(2, '0');
+          const timeStr = `${pad(now.getDate())}${pad(now.getMonth()+1)}${now.getFullYear()}_${pad(now.getHours())}h${pad(now.getMinutes())}`;
+          const outFileName = appState.dataMode === "CASE"
+            ? `Ket_Qua_Chuan_Hoa_So_Thu_Ly_Vu_An_${timeStr}.xlsx`
+            : `Ket_Qua_Chuan_Hoa_NTQLAHS_${timeStr}.xlsx`;
+
+          triggerDownloadBlob(blob, outFileName);
+          showToast(`Đã xuất ${filtered.length} dòng và Bảng Pivot Table sang file ${outFileName}!`);
+        }
+      );
+    }
+
+    function copyTableToClipboard() {
+      const filtered = getFilteredRecords();
+      if (filtered.length === 0) {
+        showToast("Chưa có dữ liệu để copy!", true);
+        return;
+      }
+      let lines = [];
+      if (appState.dataMode === "CASE") {
+        const headers = [
+          "STT", "Mã vụ án", "Tên vụ án", "Số QĐ khởi tố", "Ngày ra QĐ", "Đơn vị khởi tố",
+          "Tỉnh/Thành", "Ngày tiếp nhận", "Thời hạn", "Ngày hết thời hiệu", "Cảnh báo thời hiệu",
+          "Số thụ lý", "Ngày thụ lý", "Loại thụ lý", "Đơn vị VKS thụ lý", "Bị can đầu vụ",
+          "Tổng bị can", "Điều luật", "Phân loại tội", "Cán bộ thụ lý", "Cán bộ giải quyết",
+          "Giai đoạn", "Trạng thái vụ án", "Trạng thái biểu mẫu"
+        ];
+        lines = [headers.join("\t")];
+        filtered.forEach((r, idx) => {
+          lines.push([
+            r.stt || idx + 1, r.maVuAn, r.tenVuAn, r.soQdKhoiTo, r.ngayQdKhoiTo, r.donViKhoiTo,
+            r.tinhThanh, r.ngayTiepNhan, r.thoiHanGiaiQuyet, r.ngayHetThoiHieu, r.canhBaoThoiHieu,
+            r.soThuLy, r.ngayThuLy, r.loaiThuLy, r.vksThuLy, r.biCanDauVu, r.tongBiCan,
+            formatLawDisplay(r.dieuLuat), r.loaiToi, r.canBoThuLy, r.canBoGiaiQuyet,
+            r.giaiDoan, r.trangThaiVuAn, r.trangThaiBieuMau
+          ].map(v => String(v || "").replace(/\t|\r|\n/g, " ")).join("\t"));
+        });
+      } else {
+        const headers = [
+          "STT", "Mã vụ án", "Tên vụ án", "Cơ quan cảnh sát điều tra", "Tỉnh/Thành", "Giai đoạn",
+          "Mã bị can", "Tên bị can", "Ngày sinh", "Số CCCD", "Điều luật", "Trạng thái hồ sơ"
+        ];
+        lines = [headers.join("\t")];
+        filtered.forEach((r, idx) => {
+          lines.push([
+            r.stt || idx + 1, r.maVuAn, r.tenVuAn, r.cqdt, r.tinhThanh, r.giaiDoan,
+            r.maBiCan, r.tenBiCan, r.ngaySinh, r.soCccd, formatLawDisplay(r.dieuLuat), r.trangThai
+          ].map(v => String(v || "").replace(/\t|\r|\n/g, " ")).join("\t"));
+        });
+      }
+
+      navigator.clipboard.writeText(lines.join("\n"))
+        .then(() => showToast(`Đã copy ${filtered.length} dòng dữ liệu chuẩn hóa vào Clipboard!`))
+        .catch(() => showToast("Không thể ghi vào Clipboard.", true));
+    }
+
+    function copyPivotTableToClipboard() {
+      const pData = getPivotData();
+      const { rowTitle, rowVals, colVals, matrix, rowTotals, colTotals, grandTotal, valMode } = pData;
+      if (rowVals.length === 0) {
+        showToast("Chưa có dữ liệu Pivot để copy!", true);
+        return;
+      }
+
+      let headers = [];
+      if (appState.dataMode === "CASE") {
+        headers = ["STT", rowTitle, "Tổng số vụ án", ...colVals, "Tỷ lệ %"];
+      } else {
+        headers = ["STT", rowTitle, ...colVals, "Tổng cộng", "Tỷ lệ %"];
+      }
+      const lines = [headers.join("\t")];
+
+      rowVals.forEach((rVal, idx) => {
+        const rTotal = rowTotals[rVal] || 0;
+        const pct = grandTotal > 0 ? (rTotal / grandTotal * 100).toFixed(1) + "%" : "0%";
+        let row = [];
+        if (appState.dataMode === "CASE") {
+          row = [idx + 1, rVal, rTotal];
+          colVals.forEach(cVal => {
+            const count = matrix[rVal] && matrix[rVal][cVal] ? matrix[rVal][cVal].count : 0;
+            row.push(count);
+          });
+        } else {
+          row = [idx + 1, rVal];
+          colVals.forEach(cVal => {
+            const cell = matrix[rVal] && matrix[rVal][cVal] ? matrix[rVal][cVal] : { defCount: 0, cases: new Set() };
+            const count = valMode === "cases" ? cell.cases.size : cell.defCount;
+            row.push(count);
+          });
+          row.push(rTotal);
+        }
+        row.push(pct);
+        lines.push(row.join("\t"));
+      });
+
+      let totalRow = [];
+      if (appState.dataMode === "CASE") {
+        totalRow = ["∑", "TỔNG CỘNG CHUNG", grandTotal, ...colVals.map(c => colTotals[c] || 0), "100.0%"];
+      } else {
+        totalRow = ["∑", "TỔNG CỘNG CHUNG", ...colVals.map(c => colTotals[c] || 0), grandTotal, "100.0%"];
+      }
+      lines.push(totalRow.join("\t"));
+
+      navigator.clipboard.writeText(lines.join("\n"))
+        .then(() => showToast("Đã copy toàn bộ bảng Pivot Table vào Clipboard!"))
+        .catch(() => showToast("Không thể ghi vào Clipboard.", true));
+    }
+
+    async function handleFileSelected(file) {
+      if (!file) return;
+      document.getElementById("loadedFileName").textContent = `Đã chọn: ${file.name}`;
+      await runWithLoading(
+        `Đang nạp tập tin: ${file.name}`,
+        "Đang giải nén và phân tích cấu trúc bảng tính Excel...",
+        async () => {
+          let rawRows = [];
+          if (file.name.toLowerCase().endsWith(".xlsx")) {
+            updateLoadingDetail("Đang giải nén tập tin XLSX và trích xuất dữ liệu ô...");
+            const buf = await file.arrayBuffer();
+            rawRows = await readXlsxToRowsOffline(buf);
+          } else {
+            const txt = await file.text();
+            rawRows = txt.replace(/\r\n/g, "\n").split("\n").map(line => line.split(/\t|,/));
+          }
+
+          updateLoadingDetail(`Đang tự động nhận diện cấu trúc & bóc tách ${rawRows.length} dòng...`);
+          await new Promise(r => setTimeout(r, 20));
+
+          const detectedFmt = detectDataFormat(rawRows);
+          appState.dataMode = detectedFmt;
+
+          let parsed = [];
+          if (detectedFmt === "CASE") {
+            parsed = parseQLAHSCaseRows(rawRows);
+          } else {
+            parsed = parseQLAHSRows(rawRows);
+          }
+
+          if (parsed.length === 0) {
+            showToast("Không tìm thấy cấu trúc hồ sơ / vụ án hợp lệ trong file nạp vào.", true);
+            return;
+          }
+
+          const append = document.getElementById("chkAppendMode").checked;
+          if (append) {
+            appState.records = [...appState.records, ...parsed];
+            appState.records.forEach((r, idx) => { r.stt = idx + 1; });
+          } else {
+            appState.records = parsed;
+          }
+
+          updateLoadingDetail("Đang hiển thị danh sách hồ sơ và tính toán Pivot Table...");
+          await new Promise(r => setTimeout(r, 20));
+
+          renderTable();
+          renderPivotTable();
+
+          const formatName = detectedFmt === "CASE" ? "Sổ Vụ án / Thụ lý (24 cột)" : "Sổ Bị can (12 cột)";
+          showToast(`Nhận diện: [${formatName}] - Đã chuẩn hóa thành công ${parsed.length} bản ghi!`);
+        }
+      );
+    }
+
+    async function parseFromTextarea() {
+      const rawText = document.getElementById("pasteInputArea").value;
+      if (!rawText.trim()) {
+        showToast("Vui lòng dán dữ liệu copy từ Excel hoặc bảng NTQLAHS vào ô trước!", true);
+        return;
+      }
+      await runWithLoading(
+        "Đang xử lý dữ liệu dán từ Clipboard",
+        "Đang phân tích cấu trúc các dòng dữ liệu...",
+        async () => {
+          const lines = rawText.replace(/\r\n/g, "\n").split("\n");
+          const rawRows = lines.map(ln => {
+            if (ln.includes("\t")) return ln.split("\t");
+            return ["", ln, "", "", ""];
+          });
+
+          updateLoadingDetail(`Đang tự động nhận diện cấu trúc & bóc tách ${rawRows.length} dòng...`);
+          await new Promise(r => setTimeout(r, 20));
+
+          const detectedFmt = detectDataFormat(rawRows);
+          appState.dataMode = detectedFmt;
+
+          let parsed = [];
+          if (detectedFmt === "CASE") {
+            parsed = parseQLAHSCaseRows(rawRows);
+          } else {
+            parsed = parseQLAHSRows(rawRows);
+          }
+
+          if (parsed.length === 0) {
+            showToast("Không nhận diện được cấu trúc hợp lệ trong nội dung vừa dán.", true);
+            return;
+          }
+
+          const append = document.getElementById("chkAppendMode").checked;
+          if (append) {
+            appState.records = [...appState.records, ...parsed];
+            appState.records.forEach((r, idx) => { r.stt = idx + 1; });
+          } else {
+            appState.records = parsed;
+          }
+
+          updateLoadingDetail("Đang hiển thị kết quả và lập bảng Pivot...");
+          await new Promise(r => setTimeout(r, 20));
+
+          renderTable();
+          renderPivotTable();
+
+          const formatName = detectedFmt === "CASE" ? "Sổ Vụ án (24 cột)" : "Sổ Bị can (12 cột)";
+          showToast(`Nhận diện: [${formatName}] - Đã chuẩn hóa thành công ${parsed.length} bản ghi!`);
+        }
+      );
+    }
+
+    // =========================================================================
+    // 8. KHỞI TẠO SỰ KIỆN TRÊN TRANG
+    // =========================================================================
+    window.addEventListener("DOMContentLoaded", () => {
+      appState.records = parseQLAHSRows(INITIAL_RAW_ROWS);
+      renderTable();
+      renderPivotTable();
+
+      document.getElementById("pasteInputArea").value = INITIAL_RAW_ROWS.slice(1).map(r => r.join("\t")).join("\n");
+
+      const tabs = [
+        { btn: "tabBtnWorkspace", view: "viewWorkspace" },
+        { btn: "tabBtnPivot", view: "viewPivot" },
+        { btn: "tabBtnCompare", view: "viewCompare" },
+        { btn: "tabBtnDesktop", view: "viewDesktop" }
+      ];
+
+      function switchTab(targetBtnId) {
+        tabs.forEach(t => {
+          const b = document.getElementById(t.btn);
+          const v = document.getElementById(t.view);
+          if (t.btn === targetBtnId) {
+            b.className = "tab-active px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5";
+            v.classList.remove("hidden");
+          } else {
+            b.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5";
+            v.classList.add("hidden");
+          }
+        });
+        if (targetBtnId === "tabBtnPivot") {
+          renderPivotTable();
+        }
+      }
+
+      tabs.forEach(t => {
+        document.getElementById(t.btn).addEventListener("click", () => switchTab(t.btn));
+      });
+
+      document.getElementById("btnQuickGoPivot").addEventListener("click", () => {
+        switchTab("tabBtnPivot");
+      });
+
+      document.getElementById("presetProvStage").addEventListener("click", () => {
+        appState.pivotFullReport = false;
+        appState.pivotRowField = "tinhThanh";
+        appState.pivotColField = "giaiDoan";
+        appState.pivotValueField = "defendants";
+        document.getElementById("pivotRowSelect").value = "tinhThanh";
+        document.getElementById("pivotColSelect").value = "giaiDoan";
+        document.getElementById("pivotValueSelect").value = "defendants";
+        renderPivotTable();
+      });
+
+      document.getElementById("presetProvStatus").addEventListener("click", () => {
+        appState.pivotFullReport = false;
+        appState.pivotRowField = "tinhThanh";
+        appState.pivotColField = "trangThai";
+        appState.pivotValueField = "defendants";
+        document.getElementById("pivotRowSelect").value = "tinhThanh";
+        document.getElementById("pivotColSelect").value = "trangThai";
+        document.getElementById("pivotValueSelect").value = "defendants";
+        renderPivotTable();
+      });
+
+      document.getElementById("presetFullReport").addEventListener("click", () => {
+        appState.pivotFullReport = true;
+        renderPivotTable();
+      });
+
+      document.getElementById("presetStageStatus").addEventListener("click", () => {
+        appState.pivotFullReport = false;
+        appState.pivotRowField = "giaiDoan";
+        appState.pivotColField = "trangThai";
+        appState.pivotValueField = "defendants";
+        document.getElementById("pivotRowSelect").value = "giaiDoan";
+        document.getElementById("pivotColSelect").value = "trangThai";
+        document.getElementById("pivotValueSelect").value = "defendants";
+        renderPivotTable();
+      });
+
+      document.getElementById("pivotRowSelect").addEventListener("change", (e) => {
+        appState.pivotFullReport = false;
+        appState.pivotRowField = e.target.value;
+        renderPivotTable();
+      });
+      document.getElementById("pivotColSelect").addEventListener("change", (e) => {
+        appState.pivotFullReport = false;
+        appState.pivotColField = e.target.value;
+        renderPivotTable();
+      });
+      document.getElementById("pivotValueSelect").addEventListener("change", (e) => {
+        appState.pivotFullReport = false;
+        appState.pivotValueField = e.target.value;
+        renderPivotTable();
+      });
+
+      document.getElementById("btnExportPivotXlsx").addEventListener("click", exportPivotToExcel);
+      document.getElementById("btnCopyPivotTable").addEventListener("click", copyPivotTableToClipboard);
+
+      const fileInput = document.getElementById("fileInputXlsx");
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files && e.target.files[0]) handleFileSelected(e.target.files[0]);
+      });
+      const dropZone = document.getElementById("dropZone");
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("border-blue-600", "bg-blue-100/70");
+      });
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.classList.remove("border-blue-600", "bg-blue-100/70");
+      });
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("border-blue-600", "bg-blue-100/70");
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleFileSelected(e.dataTransfer.files[0]);
+        }
+      });
+
+      document.getElementById("btnLoadSample").addEventListener("click", () => {
+        appState.records = parseQLAHSRows(INITIAL_RAW_ROWS);
+        document.getElementById("loadedFileName").textContent = "Đang nạp sẵn: Dữ liệu mẫu (TP.HCM & Hà Tĩnh)";
+        renderTable();
+        renderPivotTable();
+        showToast("Đã khôi phục 2 vụ án mẫu ban đầu!");
+      });
+
+      document.getElementById("btnDownloadRawSample").addEventListener("click", downloadRawSampleXlsx);
+      document.getElementById("btnParsePaste").addEventListener("click", parseFromTextarea);
+      document.getElementById("btnClearPaste").addEventListener("click", () => {
+        document.getElementById("pasteInputArea").value = "";
+      });
+
+      document.getElementById("chkShortLaw").addEventListener("change", (e) => {
+        appState.shortLaw = e.target.checked;
+        renderTable();
+      });
+
+      document.getElementById("searchFilter").addEventListener("input", (e) => {
+        appState.searchQuery = e.target.value;
+        renderTable();
+      });
+      document.getElementById("provinceFilter").addEventListener("change", (e) => {
+        appState.provinceFilter = e.target.value;
+        renderTable();
+      });
+      document.getElementById("stageFilter").addEventListener("change", (e) => {
+        appState.stageFilter = e.target.value;
+        renderTable();
+      });
+      document.getElementById("statusFilter").addEventListener("change", (e) => {
+        appState.statusFilter = e.target.value;
+        renderTable();
+      });
+      document.getElementById("urgencyFilter").addEventListener("change", (e) => {
+        appState.urgencyFilter = e.target.value;
+        renderTable();
+      });
+
+      document.getElementById("btnAddRow").addEventListener("click", () => {
+        const nextStt = appState.records.length + 1;
+        appState.records.push({
+          id: "rec_" + Date.now(),
+          stt: nextStt,
+          maVuAn: "VA_",
+          tenVuAn: "",
+          cqdt: "Công an Thành phố Hồ Chí Minh",
+          tinhThanh: "TP. Hồ Chí Minh",
+          giaiDoan: "Điều tra",
+          maBiCan: "",
+          tenBiCan: "",
+          ngaySinh: "",
+          soCccd: "",
+          dieuLuat: "",
+          trangThai: "Đình nã"
+        });
+        renderTable();
+        renderPivotTable();
+        showToast("Đã thêm 1 dòng trống mới vào cuối bảng.");
+      });
+
+      document.getElementById("btnCopyTSV").addEventListener("click", copyTableToClipboard);
+      document.getElementById("btnExportXlsx").addEventListener("click", exportStandard12ColsAndPivotXlsx);
+      document.getElementById("btnClearAll").addEventListener("click", () => {
+        appState.records = [];
+        renderTable();
+        renderPivotTable();
+        showToast("Đã xóa trắng danh sách.");
+      });
+
+      fetch("Phan_Mem_Chuan_Hoa_QLAHS_Desktop.py")
+        .then(r => r.text())
+        .then(code => {
+          document.getElementById("pythonCodeBlock").textContent = code;
+        })
+        .catch(() => {
+          document.getElementById("pythonCodeBlock").textContent = "# Xem mã nguồn trong file Phan_Mem_Chuan_Hoa_QLAHS_Desktop.py";
+        });
+
+      document.getElementById("btnCopyPythonCode").addEventListener("click", () => {
+        const code = document.getElementById("pythonCodeBlock").textContent;
+        const ta = document.createElement("textarea");
+        ta.value = code;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        showToast("Đã copy mã nguồn Python Desktop vào Clipboard!");
+      });
+
+      document.getElementById("btnDownloadPythonFile").addEventListener("click", () => {
+        const code = document.getElementById("pythonCodeBlock").textContent;
+        const blob = new Blob([code], { type: "text/x-python;charset=utf-8" });
+        triggerDownloadBlob(blob, "Phan_Mem_Chuan_Hoa_QLAHS_Desktop.py");
+        showToast("Đã tải file Phan_Mem_Chuan_Hoa_QLAHS_Desktop.py!");
+      });
+    });
+  </script>
+</body>
+</html>

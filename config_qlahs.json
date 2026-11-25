@@ -1,0 +1,20 @@
+{
+  "agency_name": "VIỆN KIỂM SÁT NHÂN DÂN THÀNH PHỐ HỒ CHÍ MINH",
+  "author_title": "Trần Văn Khoa - Kiểm tra viên / VKSND TP.HCM",
+  "warning_thresholds": {
+    "urgent_days": 30,
+    "very_urgent_days": 60,
+    "warning_days": 90
+  },
+  "unit_aliases": {
+    "P2": "Phòng 2 - VKSND TP.HCM",
+    "P.2": "Phòng 2 - VKSND TP.HCM",
+    "Phòng 2": "Phòng 2 - VKSND TP.HCM",
+    "P1": "Phòng 1 - VKSND TP.HCM",
+    "P.1": "Phòng 1 - VKSND TP.HCM",
+    "Phòng 1": "Phòng 1 - VKSND TP.HCM",
+    "P3": "Phòng 3 - VKSND TP.HCM",
+    "P.3": "Phòng 3 - VKSND TP.HCM",
+    "Phòng 3": "Phòng 3 - VKSND TP.HCM"
+  }
+}
